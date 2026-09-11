@@ -1,0 +1,64 @@
+#top-nav,
+.form-search,
+.top-nav-menu {
+    display: none;
+}
+
+#header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+#checkoutbutton {
+    background-color: var(--themeColor) !important;
+}
+
+.formMsg {
+    position: fixed;
+    top: 9%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 999999;
+    width: max-content;
+    display: flex;
+    justify-content: center;
+}
+
+
+.list-voucher .item.bg-green .button-main {
+    background-color: var(--surface);
+    color: var(--black);
+}
+
+.order-id-wrapper .checkIcon i {
+    font-size: 60px;
+}
+
+.order-alerts .heading-st-6 {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.order-alerts p {
+    font-size: 14px;
+}
+
+
+.order-contact-information .information-box .key {
+    font-weight: 600;
+    display: inline-block;
+    min-width: 100px;
+}
+.order-contact-information .information-box .key, 
+.order-contact-information .information-box .value
+{
+    font-size: 14px;
+}
+.order-contact-information .information-box .value{
+    width: 200px;
+}
+
+@media (max-width: 991px){
+    .content-main{
+        flex-direction: column !important;
+    }
+}

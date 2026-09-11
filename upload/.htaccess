@@ -1,0 +1,13 @@
+# User-uploaded files (product images, review/return photos, profile
+# pictures, etc.) must never be executable - a disguised .php upload here
+# would otherwise be directly runnable by Apache. This applies to every
+# subdirectory unless it has its own overriding .htaccess.
+<FilesMatch "\.(php|phtml|php\d|pht|phar|cgi|pl)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
