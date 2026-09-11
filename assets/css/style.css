@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@import 'icomoon/style.css';
+
+
+
+:root {
+    --primary-color: #592206;
+}
+
+.theme-btn {
+    background: var(--primary-color);
+}
+
+.chunk-loading {
+    position: relative;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.progress {
+    position: absolute;
+    top: 0;
+    height: 4.5px;
+    width: 100%;
+    background: linear-gradient(var(--black) 0 0),
+        linear-gradient(var(--black) 0 0),
+        #dbdcef;
+    background-size: 60% 100%;
+    background-repeat: no-repeat;
+    animation: progress-7x9cg2 2.4000000000000004s infinite;
+}
+
+@keyframes progress-7x9cg2 {
+    0% {
+        background-position: -150% 0, -150% 0;
+    }
+
+    66% {
+        background-position: 250% 0, -150% 0;
+    }
+
+    100% {
+        background-position: 250% 0, 250% 0;
+    }
+}
+
+.st-text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 160px;
+}
+
+.footer-main {
+    background: var(--primary-color);
+    color: white;
+}
+
+.header-logo.fixed {
+    margin-top: inherit !important;
+}
+
+.header-logo.fixed img {
+    width: 70px !important;
+}
+
+.footer-quick-menus :nth-child(n+3).caption1 {
+    padding-top: 0.5rem;
+}
+
+.skeleton-item {
+    border-radius: 1rem;
+    overflow: hidden;
+    background-color: #fff;
+}
+
+.bg-gray-200 {
+    background-color: #e5e7eb;
+}
+
+.bg-gray-300 {
+    background-color: #d1d5db;
+}
+
+.rounded {
+    border-radius: 0.25rem;
+}
+
+.rounded-2xl {
+    border-radius: 1rem;
+}
+
+.animate-pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
+}
+
+.visibility-hidden {
+    visibility: hidden;
+}
+
+/* Buttons with an explicit type="button"/"submit"/"reset" attribute tie in CSS
+   specificity with Tailwind's Preflight reset ([type='button'] { background-color:
+   transparent }), and since output-tailwind.css loads after output-scss.css, Tailwind
+   wins the tie by source order - making .button-main buttons render with a transparent
+   background (invisible white-on-white text) until :hover raises the specificity back
+   above Tailwind's rule. Qualifying the selector with the element type restores the win
+   unconditionally. */
+button.button-main {
+    background-color: var(--themeColor);
+    color: var(--white);
+}
+
+button.button-main:hover {
+    background-color: var(--themeColor);
+    color: var(--white);
+}
+
+.return_info_row .btn_return_product {
+    padding: 8px 20px;
+    font-size: 12px;
+    border-radius: 8px;
+}
+
+.product-description {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+@media (max-width: 991px) {
+
+    .header-logo img,
+    .header-logo.fixed img {
+        width: 50px !important;
+    }
+
+    .slider-block {
+        height: 150px !important;
+    }
+
+    .mobile-view-off {
+        display: none !important;
+    }
+}
