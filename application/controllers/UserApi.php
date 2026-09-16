@@ -833,6 +833,26 @@ class UserApi extends REST_Controller
                         unset($item);
                         $this->CommonModel->insertRowInBatch('book_item', $items);
 
+                        // COD has no payment gateway round-trip - order creation is
+                        // the final confirmation, so stock must be reserved right
+                        // now, atomically, same as the web checkout's COD branch.
+                        // Nothing has been charged yet, so insufficient stock (a
+                        // race lost against another order since the earlier soft
+                        // stock check above) rejects the order outright.
+                        if (strtoupper($payment_mode) === 'COD') {
+                            $stockResult = $this->CommonModel->decrementOrderStock($product_book_id, false, 'order_decrement', 0, null);
+                            if (!$stockResult['success']) {
+                                $this->CommonModel->updateRowById('book_product', 'product_book_id', $product_book_id, [
+                                    'booking_status' => 2,
+                                    'cancel_message' => 'Insufficient stock for ' . $stockResult['product_name'],
+                                    'cancel_date' => date('Y-m-d H:i:s'),
+                                ]);
+                                $this->response(array('status' => 400, 'message' => 'Insufficient stock for product: ' . $stockResult['product_name'] . '. Please update your cart.', 'data' => null));
+                                return;
+                            }
+                            $this->CommonModel->updateRowById('book_product', 'product_book_id', $product_book_id, ['transaction_status' => '1']);
+                        }
+
                         if ($walletAmount > 0) {
                             debitWallet($tokenId, $walletAmount, 'Used on order ' . $orderId);
                         }
@@ -924,17 +944,19 @@ class UserApi extends REST_Controller
                             return;
                         }
 
-                        $update = $this->CommonModel->updateRowByMoreId('book_product', [
-                            'order_id' => $order_id,
-                            'user_id' => $tokenId,
-                            'transaction_status' => '0',
-                        ], [
-                            'transaction_status' => '1',
-                            'payment_id' => $payment_id,
-                            'mode' => $mode,
-                            'hash' => $hash,
+                        // Routed through the same markOrderPaid() every other
+                        // confirmation path uses (previously this wrote directly to
+                        // 'mode'/'hash' columns that don't exist on tbl_book_product -
+                        // a silent no-op/error on every mobile payment confirmation -
+                        // and bypassed stock decrement + the confirmation email
+                        // entirely).
+                        $applied = $this->CommonModel->markOrderPaid($order, [
+                            'id' => $payment_id,
+                            'method' => $mode,
+                            'amount' => $payment->amount,
+                            'signature' => $hash,
                         ]);
-                        if ($update) {
+                        if ($applied) {
                             $this->response(array('status' => 200, 'message' => 'status update successfully.', 'data' => null));
                         } else {
                             $this->response(array('status' => 400, 'message' => 'Something went wrong. Please try again', 'data' => null));

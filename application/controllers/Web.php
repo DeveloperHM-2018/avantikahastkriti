@@ -856,6 +856,23 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
                         'st_razorpay_api_key' => RAZOR_PYA_KEY
                     ]);
                 } else {
+                    // COD is confirmed instantly (no payment gateway round-trip),
+                    // so stock must be reserved right now, atomically - unlike the
+                    // online branch above, nothing has been charged yet, so on
+                    // insufficient stock (a race lost against another order since
+                    // the soft pre-check above) the order is rejected outright
+                    // rather than pinned for review.
+                    $stockResult = $this->CommonModel->decrementOrderStock($checkoutId, false, 'order_decrement', 0, null);
+                    if (!$stockResult['success']) {
+                        $this->CommonModel->updateRowById('book_product', 'product_book_id', $checkoutId, [
+                            'booking_status' => 2,
+                            'cancel_message' => 'Insufficient stock for ' . $stockResult['product_name'],
+                            'cancel_date' => date('Y-m-d H:i:s'),
+                        ]);
+                        echo json_encode(['success' => false, 'message' => 'Insufficient stock for product: ' . $stockResult['product_name'] . '. Please update your cart.']);
+                        return;
+                    }
+
                     $saveOrder = $this->CommonModel->updateRowById('book_product', 'product_book_id', $checkoutId, ['transaction_status' => '1']);
 
                     // Sync to Shiprocket (COD) - Removed for manual sync

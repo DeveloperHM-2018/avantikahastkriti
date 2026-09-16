@@ -108,8 +108,7 @@
                                         <label class="col-form-label">Payment Mode *</label>
                                         <select class="form-control select2" name="payment_mode" required>
                                             <option value="COD">Cash on Delivery</option>
-                                            <option value="Manual">Manual / Offline</option>
-                                            <option value="ONLINE">Online (already collected)</option>
+                                            <option value="PAID_MANUAL">Already Paid (cash / bank transfer collected offline)</option>
                                         </select>
                                     </div>
                                     <div class="col-lg-3 mb-3">
@@ -146,16 +145,30 @@
     function productOptions() {
         var html = '<option value="">Select Product</option>';
         allProducts.forEach(function(p) {
-            html += '<option value="' + p.product_id + '" data-price="' + p.sale_price + '">' + p.product_name + '</option>';
+            var stockNote = p.is_out_of_stock == 1 ? ' (OUT OF STOCK)' : ' (' + p.quantity + ' in stock)';
+            html += '<option value="' + p.product_id + '" data-price="' + p.sale_price + '" data-stock="' + p.quantity + '">' + p.product_name + stockNote + '</option>';
         });
         return html;
+    }
+
+    function checkRowStock($row) {
+        var $select = $row.find('.product-select');
+        var stock = parseFloat($select.find(':selected').data('stock'));
+        var qty = parseFloat($row.find('.qty-input').val()) || 0;
+        var $warn = $row.find('.stock-warning');
+        if (!isNaN(stock) && qty > stock) {
+            $warn.text('Only ' + stock + ' available - order will be rejected if stock changes before saving.').show();
+        } else {
+            $warn.hide();
+        }
     }
 
     function addProductRow() {
         var idx = rowIndex++;
         var $row = $('<tr></tr>');
         $row.html(
-            '<td><select class="form-control select2 product-select" name="product_id[]">' + productOptions() + '</select></td>' +
+            '<td><select class="form-control select2 product-select" name="product_id[]">' + productOptions() + '</select>' +
+            '<div class="text-danger stock-warning" style="display:none;font-size:12px;"></div></td>' +
             '<td><input type="number" min="1" step="1" class="form-control qty-input" name="quantity[]" value="1"></td>' +
             '<td><input type="number" min="0" step="0.01" class="form-control price-input" name="price[]" value="0"></td>' +
             '<td><input type="text" class="form-control line-total" readonly value="0.00"></td>' +
@@ -163,6 +176,9 @@
         );
         $('#productItemsTable tbody').append($row);
         $row.find('.select2').select2();
+        $row.on('change', '.product-select, .qty-input', function() {
+            checkRowStock($row);
+        });
         return $row;
     }
 

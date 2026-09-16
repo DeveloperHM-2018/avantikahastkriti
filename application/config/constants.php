@@ -104,6 +104,15 @@ defined('MAX_PRODUCT_IMAGE_SIZE')      or define('MAX_PRODUCT_IMAGE_SIZE', 5 * 1
 defined('MAX_RETURN_IMAGE_SIZE')       or define('MAX_RETURN_IMAGE_SIZE', 5 * 1024 * 1024); // 5 MB, in bytes
 defined('MAX_RETURN_IMAGES')           or define('MAX_RETURN_IMAGES', 5);
 
+// Vendor KYC documents (GST certificate, PAN, bank proof) are personally
+// identifying financial material - stored under application/vendor_documents/
+// which application/.htaccess already fully denies direct web access to
+// ("Require all denied"), served only via AdminVendor::viewDocument() after
+// an admin-session check. Never move this under upload/ (that .htaccess only
+// blocks executable extensions, not viewing).
+defined('VENDOR_DOCUMENT_PATH')        or define('VENDOR_DOCUMENT_PATH', APPPATH . 'vendor_documents/');
+defined('MAX_VENDOR_DOCUMENT_SIZE')    or define('MAX_VENDOR_DOCUMENT_SIZE', 5 * 1024 * 1024); // 5 MB, in bytes
+
 // Return Management status codes (tbl_return_request.status)
 defined('RETURN_STATUS_REQUESTED')          or define('RETURN_STATUS_REQUESTED', 0);
 defined('RETURN_STATUS_UNDER_REVIEW')       or define('RETURN_STATUS_UNDER_REVIEW', 1);
@@ -118,6 +127,17 @@ defined('RETURN_STATUS_REJECTED')           or define('RETURN_STATUS_REJECTED', 
 defined('REFUND_STATUS_PENDING')   or define('REFUND_STATUS_PENDING', 0);
 defined('REFUND_STATUS_COMPLETED') or define('REFUND_STATUS_COMPLETED', 1);
 defined('REFUND_STATUS_FAILED')    or define('REFUND_STATUS_FAILED', 2);
+
+// Order origin (tbl_book_product.order_source)
+defined('ORDER_SOURCE_WEB')            or define('ORDER_SOURCE_WEB', 0);
+defined('ORDER_SOURCE_MOBILE_APP')     or define('ORDER_SOURCE_MOBILE_APP', 1);
+defined('ORDER_SOURCE_MAGIC_CHECKOUT') or define('ORDER_SOURCE_MAGIC_CHECKOUT', 2);
+defined('ORDER_SOURCE_ADMIN_MANUAL')   or define('ORDER_SOURCE_ADMIN_MANUAL', 3);
+
+// Stock ledger actor type (tbl_stock_ledger.changed_by_type, tbl_admin_activity_log.actor_type)
+defined('ACTOR_TYPE_SYSTEM') or define('ACTOR_TYPE_SYSTEM', 0);
+defined('ACTOR_TYPE_ADMIN')  or define('ACTOR_TYPE_ADMIN', 1);
+defined('ACTOR_TYPE_VENDOR') or define('ACTOR_TYPE_VENDOR', 2);
 
 // SECURITY: these values were previously hardcoded here in plaintext and must
 // be treated as already compromised - rotate them in the Razorpay/Shiprocket
