@@ -42,16 +42,24 @@ class AdminAuth extends CI_Controller
 						}
 
 						if (!$passwordOk) {
+							$this->CommonModel->logAdminActivity(1, $id, 'admin_login_failed', 'admin', $id, null, ['reason' => 'bad_password']);
 							flashData('login_error', 'Enter a valid Password.');
 						} else if ($status == '0') {
+							$this->CommonModel->logAdminActivity(1, $id, 'admin_login_failed', 'admin', $id, null, ['reason' => 'blocked']);
 							flashData('login_error', 'You are blocked.');
 						} else {
+							// Regenerate the session id on privilege escalation so a
+							// session id captured/fixated before login (e.g. from a
+							// shared kiosk or an intercepted pre-auth request) can
+							// never carry into an authenticated, privileged session.
+							session_regenerate_id(true);
 							setSession(array(
 								'admin_id' => $id,
 								'admin_name' => $name,
 								'privileges' => $get['privileges'],
 								'user_type' => $get['user_type'],
 							));
+							$this->CommonModel->logAdminActivity(1, $id, 'admin_login', 'admin', $id);
 							redirect('dashboard');
 						}
 					} else {
@@ -65,7 +73,16 @@ class AdminAuth extends CI_Controller
 
 	public function adminLogout()
 	{
-		$this->session->unset_userdata(['admin_id', 'admin_name']);
+		$adminId = sessionId('admin_id');
+		if ($adminId != '') {
+			$this->CommonModel->logAdminActivity(1, $adminId, 'admin_logout', 'admin', $adminId);
+		}
+		// Clear the full admin session, not just admin_id/admin_name - leaving
+		// privileges/user_type behind was a stale-privilege residue risk on
+		// shared machines even though setSession() on the next login always
+		// overwrites both keys.
+		$this->session->unset_userdata(['admin_id', 'admin_name', 'privileges', 'user_type']);
+		session_regenerate_id(true);
 		redirect('admin');
 	}
 

@@ -337,6 +337,23 @@ class AdminReturn extends CI_Controller
 		$this->CommonModel->updateRowByIdWithOutXss('return_request', "return_id = '$id'", ['admin_notes' => $adminNotes]);
 		logReturnStatus($id, RETURN_STATUS_APPROVED, $adminNotes, 1, sessionId('admin_id'));
 
+		// Restock only the returned quantity for this specific line, not the
+		// whole order (a return is normally partial - one line/quantity out of
+		// a multi-item order) - and only if that line actually had stock
+		// decremented from it in the first place (a pinned/oversold line never
+		// took anything from inventory, so there's nothing to give back).
+		$returnedItem = $this->CommonModel->getSingleRowById('book_item', ['book_item_id' => $returnRow['book_item_id']]);
+		if ($returnedItem && $returnedItem['stock_applied'] == 1) {
+			$this->CommonModel->applyStockRestock($returnedItem['product_id'], $returnedItem['variant_id'], $returnRow['quantity_return'], [
+				'change_type' => 'order_restock_return',
+				'reference_type' => 'return_request',
+				'reference_id' => $id,
+				'changed_by_type' => 1,
+				'changed_by_id' => sessionId('admin_id'),
+			]);
+		}
+		$this->CommonModel->logAdminActivity(1, sessionId('admin_id'), 'return_approve', 'return', $id, null, ['admin_notes' => $adminNotes]);
+
 		$order = $this->CommonModel->getSingleRowById('book_product', ['product_book_id' => $returnRow['product_book_id']]);
 		if ($order) {
 			sendTemplatedMail('return_approved_user', $order['email'], [

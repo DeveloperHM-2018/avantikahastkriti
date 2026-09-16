@@ -33,6 +33,8 @@
                             <a class="caption1 has-line-before duration-300 w-fit pt-2" href="<?= base_url('contact') ?>">Contact us </a>
                             <a class="caption1 has-line-before duration-300 w-fit pt-2" href="<?= base_url('profile') ?>"> My Account</a>
                             <a class="caption1 has-line-before duration-300 w-fit pt-2" href="<?= base_url('profile#orders') ?>"> Order & Returns</a>
+                            <a class="caption1 has-line-before duration-300 w-fit pt-2" href="<?= base_url('vendor/register') ?>">Become a Vendor</a>
+                            <a class="caption1 has-line-before duration-300 w-fit pt-2" href="<?= base_url('vendor/login') ?>">Vendor Login</a>
                         </div>
                         <div class="item flex flex-col basis-1/3 footer-quick-menus">
                             <div class="text-button-uppercase pb-3">Quick Shop</div>

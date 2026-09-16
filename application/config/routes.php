@@ -126,6 +126,58 @@ $route['submitReview'] = 'Web/submit_review';
 $route['productReviews'] = 'AdminProduct/productReviews';
 $route['productReviewToggleStatus/(:any)/(:any)'] = 'AdminProduct/productReviewToggleStatus/$1/$2';
 
+// ==> Vendor Portal (vendor-facing, own auth realm)
+$route['vendor/register'] = 'Vendor/register';
+$route['vendor/login'] = 'Vendor/login';
+$route['vendor/logout'] = 'Vendor/logout';
+$route['vendor/dashboard'] = 'Vendor/dashboard';
+$route['vendor/products'] = 'Vendor/products';
+$route['vendor/productAdd'] = 'Vendor/productAdd';
+$route['vendor/orders'] = 'Vendor/orders';
+$route['vendor/payouts'] = 'Vendor/payouts';
+$route['vendor/profile'] = 'Vendor/profile';
+
+// ==> Vendor Management (admin-side)
+$route['vendorAll'] = 'AdminVendor/vendorAll';
+$route['vendorAdd'] = 'AdminVendor/vendorAdd';
+$route['vendorApprove/(:any)'] = 'AdminVendor/vendorApprove/$1';
+$route['vendorReject/(:any)'] = 'AdminVendor/vendorReject/$1';
+$route['vendorSuspend/(:any)'] = 'AdminVendor/vendorSuspend/$1';
+$route['vendorActivate/(:any)'] = 'AdminVendor/vendorActivate/$1';
+$route['vendorDetails'] = 'AdminVendor/vendorDetails';
+$route['vendorViewDocument/(:any)'] = 'AdminVendor/viewDocument/$1';
+$route['vendorProductQueue'] = 'AdminVendor/vendorProductQueue';
+$route['vendorProductReview'] = 'AdminVendor/vendorProductReview';
+$route['vendorPayoutAll'] = 'AdminVendor/vendorPayoutAll';
+$route['vendorPayoutCreate'] = 'AdminVendor/vendorPayoutCreate';
+$route['vendorPayoutMarkPaid'] = 'AdminVendor/vendorPayoutMarkPaid';
+
+// ==> Inventory
+$route['stockAll'] = 'AdminInventory/stockAll';
+$route['stockAdjust'] = 'AdminInventory/stockAdjust';
+$route['stockClearOverride/(:any)'] = 'AdminInventory/stockClearOverride/$1';
+$route['stockLedger'] = 'AdminInventory/stockLedger';
+$route['lowStockAll'] = 'AdminInventory/lowStockAll';
+$route['outOfStockAll'] = 'AdminInventory/outOfStockAll';
+$route['pinnedOrders'] = 'AdminInventory/pinnedOrders';
+$route['resolvePinnedOrder'] = 'AdminInventory/resolvePinnedOrder';
+
+// ==> Reports
+$route['salesReport'] = 'AdminReports/salesReport';
+$route['inventoryReport'] = 'AdminReports/inventoryReport';
+$route['purchaseReport'] = 'AdminReports/purchaseReport';
+$route['vendorReport'] = 'AdminReports/vendorReport';
+
+// ==> Admin self-service profile
+// NOTE: 'profile' is already taken by the customer-facing Web/profile route
+// above - must not reuse that key here or it silently overrides it.
+$route['adminProfile'] = 'AdminProfile/profile';
+$route['updateProfile'] = 'AdminProfile/updateProfile';
+$route['changePassword'] = 'AdminProfile/changePassword';
+
+// ==> Admin activity log
+$route['activityLogAll'] = 'AdminAudit/activityLogAll';
+
 // ==> Product Returns
 $route['returnDashboard'] = 'AdminReturn/returnDashboard';
 $route['returnReports'] = 'AdminReturn/returnReports';

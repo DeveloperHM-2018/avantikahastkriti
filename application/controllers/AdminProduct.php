@@ -332,12 +332,24 @@ class AdminProduct extends CI_Controller
 		}
 	}
 
+	// This is now a manual OVERRIDE, not the source of truth for stock status.
+	// tbl_product.is_out_of_stock is normally derived automatically from real
+	// stock levels by CommonModel::applyStockDecrement()/applyStockRestock()
+	// every time an order/cancel/return/adjustment moves stock. Clicking this
+	// button forces the flag regardless of quantity (e.g. hide a product
+	// without lying about how many are left) and pins it there until an
+	// admin clears the override from the Inventory > Stock page, which hands
+	// control back to the automatic quantity-derived flag.
 	public function productStockToggle($product_id, $status)
 	{
 		$id = decryptId($product_id);
-		$update = $this->CommonModel->updateRowById('product', 'product_id', $id, ['is_out_of_stock' => $status]);
+		$update = $this->CommonModel->updateRowById('product', 'product_id', $id, [
+			'is_out_of_stock' => $status,
+			'is_out_of_stock_override' => $status,
+		]);
 		if ($update) {
-			flashData('errors', $status == '1' ? 'Product marked Out of Stock.' : 'Product marked In Stock.');
+			$this->CommonModel->logAdminActivity(1, sessionId('admin_id'), 'product_stock_override', 'product', $id, null, ['is_out_of_stock' => $status]);
+			flashData('errors', $status == '1' ? 'Product force-marked Out of Stock (override).' : 'Override cleared - stock status now follows live quantity.');
 		} else {
 			flashData('errors', 'Failed to update stock status.');
 		}

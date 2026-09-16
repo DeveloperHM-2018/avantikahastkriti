@@ -48,6 +48,38 @@ $page = ACTIVE_PAGE;
 					</li>
 				<?php } ?>
 
+				<?php if (@PREV['inventory_view'] == 1 || USER_TYPE == '1') { ?>
+					<li class=" <?= $page == "stockAll" || $page == "stockAdjust" || $page == "stockLedger" || $page == "lowStockAll" || $page == "outOfStockAll" || $page == "pinnedOrders" ? 'mm-active' : '' ?>">
+						<a href="javascript: void(0);" class="has-arrow waves-effect">
+							<i class="bx bx-cube"></i>
+							<span key="t-file-manager">Inventory</span>
+						</a>
+						<ul class="sub-menu" aria-expanded="false">
+							<li><a href="<?= base_url('stockAll') ?>" class="<?= $page == "stockAll" || $page == "stockAdjust" || $page == "stockLedger" ? 'active' : '' ?>">Stock</a></li>
+							<li><a href="<?= base_url('lowStockAll') ?>" class="<?= $page == "lowStockAll" ? 'active' : '' ?>">Low Stock</a></li>
+							<li><a href="<?= base_url('outOfStockAll') ?>" class="<?= $page == "outOfStockAll" ? 'active' : '' ?>">Out of Stock</a></li>
+							<li><a href="<?= base_url('pinnedOrders') ?>" class="<?= $page == "pinnedOrders" ? 'active' : '' ?>">Pinned Orders</a></li>
+						</ul>
+					</li>
+				<?php } ?>
+
+				<?php if (@PREV['vendor_view'] == 1 || USER_TYPE == '1') { ?>
+					<li class=" <?= in_array($page, ['vendorAll', 'vendorAdd', 'vendorDetails', 'vendorProductQueue', 'vendorProductReview', 'vendorPayoutAll']) ? 'mm-active' : '' ?>">
+						<a href="javascript: void(0);" class="has-arrow waves-effect">
+							<i class="bx bx-store"></i>
+							<span key="t-file-manager">Vendors</span>
+						</a>
+						<ul class="sub-menu" aria-expanded="false">
+							<li><a href="<?= base_url('vendorAll') ?>" class="<?= $page == "vendorAll" || $page == "vendorDetails" ? 'active' : '' ?>">All Vendors</a></li>
+							<?php if (@PREV['vendor_approve'] == 1 || USER_TYPE == '1') { ?>
+								<li><a href="<?= base_url('vendorAdd') ?>" class="<?= $page == "vendorAdd" ? 'active' : '' ?>">Add Vendor</a></li>
+							<?php } ?>
+							<li><a href="<?= base_url('vendorProductQueue') ?>" class="<?= $page == "vendorProductQueue" || $page == "vendorProductReview" ? 'active' : '' ?>">Product Approvals</a></li>
+							<li><a href="<?= base_url('vendorPayoutAll') ?>" class="<?= $page == "vendorPayoutAll" ? 'active' : '' ?>">Payouts</a></li>
+						</ul>
+					</li>
+				<?php } ?>
+
 				<?php if (@PREV['users_view'] == 1 || USER_TYPE == '1') { ?>
 					<li class=" <?php if ($page == "activeUser" || $page == 'inactiveUser' || $page == 'vendorProductRateUpdate') {
 									echo "mm-active";
@@ -143,6 +175,30 @@ $page = ACTIVE_PAGE;
 							<span key="t-file-manager">Addon</span>
 						</a>
 					</li> -->
+				<?php } ?>
+
+				<?php if (@PREV['reports_view'] == 1 || USER_TYPE == '1') { ?>
+					<li class=" <?= in_array($page, ['salesReport', 'inventoryReport', 'purchaseReport', 'vendorReport']) ? 'mm-active' : '' ?>">
+						<a href="javascript: void(0);" class="has-arrow waves-effect">
+							<i class="bx bx-bar-chart-alt-2"></i>
+							<span key="t-file-manager">Reports</span>
+						</a>
+						<ul class="sub-menu" aria-expanded="false">
+							<li><a href="<?= base_url('salesReport') ?>" class="<?= $page == "salesReport" ? 'active' : '' ?>">Sales</a></li>
+							<li><a href="<?= base_url('inventoryReport') ?>" class="<?= $page == "inventoryReport" ? 'active' : '' ?>">Inventory</a></li>
+							<li><a href="<?= base_url('purchaseReport') ?>" class="<?= $page == "purchaseReport" ? 'active' : '' ?>">Purchase</a></li>
+							<li><a href="<?= base_url('vendorReport') ?>" class="<?= $page == "vendorReport" ? 'active' : '' ?>">Vendor</a></li>
+						</ul>
+					</li>
+				<?php } ?>
+
+				<?php if (@PREV['audit_log_view'] == 1 || USER_TYPE == '1') { ?>
+					<li>
+						<a href="<?= base_url('activityLogAll') ?>" class="waves-effect <?= $page == 'activityLogAll' ? 'mm-active' : '' ?>">
+							<i class="bx bx-history"></i>
+							<span key="t-file-manager">Activity Log</span>
+						</a>
+					</li>
 				<?php } ?>
 
 				<li class=" <?= $page == "setDeliveryCharges" || $page == "addOnData" || $page == "addOnDataAdd" || $page == "metaData" || $page == "metaDataEdit" || $page == "mailSmtpSetting" || $page == "mailTemplateAll" || $page == "mailTemplateEdit" || $page == "faqAll" || $page == "faqAdd" || $page == "siteSettings" ? 'mm-active' : '' ?>">

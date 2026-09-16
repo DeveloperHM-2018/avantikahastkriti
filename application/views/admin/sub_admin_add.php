@@ -149,6 +149,49 @@
                                                         <span>Order Process <input type="checkbox" class="form-check-input" name="payment_request_process" value="1" <?= isset($privileges->payment_request_process) ? ($privileges->payment_request_process == 1 ? 'checked' : '') : '' ?>></span>
                                                     </td>
                                                 </tr>
+                                                <tr>
+                                                    <td>Inventory</td>
+                                                    <td><input type="checkbox" class="form-check-input" name="inventory_view" value="1" <?= isset($privileges->inventory_view) ? ($privileges->inventory_view == 1 ? 'checked' : '') : '' ?>></td>
+                                                    <td></td>
+                                                    <td></td>
+                                                    <td>
+                                                        <span>Adjust Stock <input type="checkbox" class="form-check-input" name="inventory_adjust" value="1" <?= isset($privileges->inventory_adjust) ? ($privileges->inventory_adjust == 1 ? 'checked' : '') : '' ?>></span>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Vendors</td>
+                                                    <td><input type="checkbox" class="form-check-input" name="vendor_view" value="1" <?= isset($privileges->vendor_view) ? ($privileges->vendor_view == 1 ? 'checked' : '') : '' ?>></td>
+                                                    <td></td>
+                                                    <td></td>
+                                                    <td>
+                                                        <span>Approve Vendor <input type="checkbox" class="form-check-input" name="vendor_approve" value="1" <?= isset($privileges->vendor_approve) ? ($privileges->vendor_approve == 1 ? 'checked' : '') : '' ?>></span>
+                                                        <span class="ms-2">Approve Products <input type="checkbox" class="form-check-input" name="vendor_product_approve" value="1" <?= isset($privileges->vendor_product_approve) ? ($privileges->vendor_product_approve == 1 ? 'checked' : '') : '' ?>></span>
+                                                        <span class="ms-2">Process Payouts <input type="checkbox" class="form-check-input" name="vendor_payout_process" value="1" <?= isset($privileges->vendor_payout_process) ? ($privileges->vendor_payout_process == 1 ? 'checked' : '') : '' ?>></span>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Manual Orders</td>
+                                                    <td></td>
+                                                    <td></td>
+                                                    <td></td>
+                                                    <td>
+                                                        <span>Create <input type="checkbox" class="form-check-input" name="orders_manual_create" value="1" <?= isset($privileges->orders_manual_create) ? ($privileges->orders_manual_create == 1 ? 'checked' : '') : '' ?>></span>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Reports</td>
+                                                    <td><input type="checkbox" class="form-check-input" name="reports_view" value="1" <?= isset($privileges->reports_view) ? ($privileges->reports_view == 1 ? 'checked' : '') : '' ?>></td>
+                                                    <td></td>
+                                                    <td></td>
+                                                    <td></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Admin Activity Log</td>
+                                                    <td><input type="checkbox" class="form-check-input" name="audit_log_view" value="1" <?= isset($privileges->audit_log_view) ? ($privileges->audit_log_view == 1 ? 'checked' : '') : '' ?>></td>
+                                                    <td></td>
+                                                    <td></td>
+                                                    <td></td>
+                                                </tr>
                                             </tbody>
                                         </table>
                                     </div>

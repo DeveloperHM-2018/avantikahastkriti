@@ -489,7 +489,13 @@ class AdminHome extends CI_Controller
 				$post['user_type'] = 2;
 
 				if ($password != "") {
-					$post['password'] = encryptId($password);
+					// Was encryptId() - a reversible cipher, not a real password
+					// hash - meaning every newly created sub-admin got a weak
+					// credential from day one. New/changed sub-admin passwords
+					// now go straight to bcrypt, same as AdminAuth's own login
+					// already treats as the primary (and, for existing accounts,
+					// lazily-migrated) format.
+					$post['password'] = password_hash($password, PASSWORD_DEFAULT);
 				}
 
 				$post2['banner_view'] = isset($banner_view) ? 1 : 0;
@@ -529,6 +535,18 @@ class AdminHome extends CI_Controller
 
 				$post2['payment_request_view'] = isset($payment_request_view) ? 1 : 0;
 				$post2['payment_request_process'] = isset($payment_request_process) ? 1 : 0;
+
+				$post2['inventory_view'] = isset($inventory_view) ? 1 : 0;
+				$post2['inventory_adjust'] = isset($inventory_adjust) ? 1 : 0;
+
+				$post2['vendor_view'] = isset($vendor_view) ? 1 : 0;
+				$post2['vendor_approve'] = isset($vendor_approve) ? 1 : 0;
+				$post2['vendor_product_approve'] = isset($vendor_product_approve) ? 1 : 0;
+				$post2['vendor_payout_process'] = isset($vendor_payout_process) ? 1 : 0;
+
+				$post2['orders_manual_create'] = isset($orders_manual_create) ? 1 : 0;
+				$post2['reports_view'] = isset($reports_view) ? 1 : 0;
+				$post2['audit_log_view'] = isset($audit_log_view) ? 1 : 0;
 
 				$post['privileges'] = json_encode($post2);
 
@@ -904,7 +922,9 @@ class AdminHome extends CI_Controller
 		$estimated_date = $this->input->post('estimated_date');
 		$id = $this->input->post('id');
 		if ($estimated_time != '' and $id != '') {
-			$update = $this->CommonModel->updateRowById('book_product', 'product_book_id', decryptId($id), array('booking_status' => '1', 'estimated_time' => $estimated_date . ' ' . date('h:i A', strtotime($estimated_time))));
+			$orderId = decryptId($id);
+			$update = $this->CommonModel->updateRowById('book_product', 'product_book_id', $orderId, array('booking_status' => '1', 'estimated_time' => $estimated_date . ' ' . date('h:i A', strtotime($estimated_time))));
+			$this->CommonModel->logAdminActivity(1, sessionId('admin_id'), 'order_accept', 'order', $orderId);
 			$this->notifyOrderStatus(decryptId($id), 'Accepted');
 			flashData('errors', 'Order accept successfully');
 		} else {
@@ -918,7 +938,13 @@ class AdminHome extends CI_Controller
 		$cancel_msg = $this->input->post('cancel_msg');
 		$id = $this->input->post('id');
 		if ($cancel_msg != '' and $id != '') {
-			$update = $this->CommonModel->updateRowById('book_product', 'product_book_id', decryptId($id), array('booking_status' => '2', 'cancel_message' => $cancel_msg, 'cancel_date' => date('d.m.Y')));
+			$orderId = decryptId($id);
+			$update = $this->CommonModel->updateRowById('book_product', 'product_book_id', $orderId, array('booking_status' => '2', 'cancel_message' => $cancel_msg, 'cancel_date' => date('d.m.Y')));
+			// Restock is a no-op for lines that never actually decremented stock
+			// (e.g. an online order cancelled before payment was confirmed) -
+			// restockOrderItems only touches lines with stock_applied=1.
+			$this->CommonModel->restockOrderItems($orderId, 'order_restock_cancel', 1, sessionId('admin_id'));
+			$this->CommonModel->logAdminActivity(1, sessionId('admin_id'), 'order_cancel', 'order', $orderId, null, ['cancel_message' => $cancel_msg]);
 			$this->notifyOrderStatus(decryptId($id), 'Cancelled');
 			flashData('errors', 'Order Cancel successfully');
 		} else {
@@ -1048,6 +1074,9 @@ class AdminHome extends CI_Controller
 
 	public function addOrder()
 	{
+		if (!(@PREV['orders_manual_create'] == 1 || USER_TYPE == '1')) {
+			show_404();
+		}
 		$data['title'] = 'New Order';
 		$data['all_customers'] = $this->CommonModel->getRowByIdInOrder('user_registration', "user_status = '1'", 'name', 'ASC');
 		$data['all_products'] = $this->CommonModel->getRowByIdInOrder('product', "is_delete = '1'", 'product_name', 'ASC');
@@ -1058,13 +1087,17 @@ class AdminHome extends CI_Controller
 
 	public function addOrderSave()
 	{
+		if (!(@PREV['orders_manual_create'] == 1 || USER_TYPE == '1')) {
+			show_404();
+		}
+
 		extract($this->input->post());
 
 		$this->form_validation->set_rules('address', 'Address', 'trim|required');
 		$this->form_validation->set_rules('postal_code', 'Postal Code', 'trim|required');
 		$this->form_validation->set_rules('state', 'State', 'trim|required');
 		$this->form_validation->set_rules('city', 'City', 'trim|required');
-		$this->form_validation->set_rules('payment_mode', 'Payment Mode', 'trim|required');
+		$this->form_validation->set_rules('payment_mode', 'Payment Mode', 'trim|required|in_list[COD,PAID_MANUAL]');
 		$this->form_validation->set_rules('product_id[]', 'Product', 'required');
 
 		if (@$customer_id == 'new') {
@@ -1171,29 +1204,61 @@ class AdminHome extends CI_Controller
 			'wallet_amount' => 0,
 			'final_amount' => $finalAmount,
 			'payment_mode' => $payment_mode,
+			// Phone/counter sales have no payment-gateway round-trip - the order
+			// is confirmed the instant it's created, whether COD (paid on
+			// delivery) or PAID_MANUAL (already collected cash/bank transfer
+			// offline) - so it's marked paid immediately either way, same as
+			// this form has always done. What's new is the stock reservation
+			// below, which now actually happens at this same instant instead
+			// of never happening at all.
 			'transaction_status' => '1',
 			'booking_status' => '0',
 			'booking_date' => date('Y-m-d H:i:s'),
 			'delivery_possible' => '1',
+			'order_source' => ORDER_SOURCE_ADMIN_MANUAL,
+			'created_by_admin_id' => sessionId('admin_id'),
 		];
 
+		$this->db->trans_start();
 		$productBookId = $this->CommonModel->insertRowReturnId('book_product', $orderData);
 		if ($productBookId) {
 			foreach ($items as $item) {
 				$item['product_book_id'] = $productBookId;
 				$this->CommonModel->insertRow('book_item', $item);
 			}
+		}
+		$this->db->trans_complete();
 
-			$smtp = $this->CommonModel->getSingleRowById('mail_smtp_setting', ['id' => 1]);
-			sendTemplatedMail('order_placed_user', $custEmail, ['name' => $custName, 'order_id' => $orderId, 'final_amount' => $finalAmount, 'app_name' => APP_NAME]);
-			sendTemplatedMail('order_placed_admin', @$smtp['notify_email'], ['name' => $custName, 'order_id' => $orderId, 'final_amount' => $finalAmount, 'app_name' => APP_NAME]);
-
-			flashData('errors', 'Order created successfully: ' . $orderId);
-			redirect('allOrders');
-		} else {
+		if (!$productBookId || $this->db->trans_status() === false) {
 			flashData('errors', 'Something went wrong. Order not created.');
 			redirect('addOrder');
+			return;
 		}
+
+		// Reserved synchronously, right now - nothing has been charged through
+		// a gateway for this order, so on insufficient stock (a race lost
+		// against another order placed for the same item) it's rejected
+		// outright instead of pinned, exactly like the web COD checkout.
+		$stockResult = $this->CommonModel->decrementOrderStock($productBookId, false, 'admin_manual_order_decrement', ACTOR_TYPE_ADMIN, sessionId('admin_id'));
+		if (!$stockResult['success']) {
+			$this->CommonModel->updateRowById('book_product', 'product_book_id', $productBookId, [
+				'booking_status' => 2,
+				'cancel_message' => 'Insufficient stock for ' . $stockResult['product_name'],
+				'cancel_date' => date('Y-m-d H:i:s'),
+			]);
+			flashData('errors', 'Insufficient stock for product: ' . $stockResult['product_name'] . '. Order was not created - adjust the quantity or restock first.');
+			redirect('addOrder');
+			return;
+		}
+
+		$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'order_manual_create', 'order', $productBookId, null, ['order_id' => $orderId, 'final_amount' => $finalAmount]);
+
+		$smtp = $this->CommonModel->getSingleRowById('mail_smtp_setting', ['id' => 1]);
+		sendTemplatedMail('order_placed_user', $custEmail, ['name' => $custName, 'order_id' => $orderId, 'final_amount' => $finalAmount, 'app_name' => APP_NAME]);
+		sendTemplatedMail('order_placed_admin', @$smtp['notify_email'], ['name' => $custName, 'order_id' => $orderId, 'final_amount' => $finalAmount, 'app_name' => APP_NAME]);
+
+		flashData('errors', 'Order created successfully: ' . $orderId);
+		redirect('allOrders');
 	}
 
 	// Addon
