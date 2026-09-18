@@ -200,10 +200,10 @@ class Vendor extends CI_Controller
 				$data[] = [
 					'product_name' => $record['product_name'],
 					'vendor_supply_price' => $record['vendor_supply_price'],
-					'proposed_sale_price' => $record['proposed_sale_price'],
 					'quantity_supplied' => $record['quantity_supplied'],
 					'status' => statusView($statusColors[$record['status']], $statusLabels[$record['status']]),
 					'admin_notes' => $record['admin_notes'] ?: '-',
+					'action' => '<a href="' . base_url('vendor/productAdd?id=' . encryptId($record['vendor_product_id'])) . '" class="btn btn-primary btn-sm"><i class="fa fa-edit"></i> Edit</a>',
 				];
 			}
 
@@ -220,50 +220,211 @@ class Vendor extends CI_Controller
 		$table_header = [
 			['data' => 'product_name'],
 			['data' => 'vendor_supply_price'],
-			['data' => 'proposed_sale_price'],
 			['data' => 'quantity_supplied'],
 			['data' => 'status'],
 			['data' => 'admin_notes'],
+			['data' => 'action'],
 		];
 		$data['ajax_table'] = 'vendor/products';
 		$data['table_column'] = json_encode($table_header);
-		$data['col_stop'] = '5';
+		$data['col_stop'] = '4,5';
 		$this->load->view('vendor/product_all', $data);
 	}
 
+	// Field set deliberately mirrors AdminProduct::productAdd()/product_add.php
+	// (category -> sub-category -> sub-category type cascade, product type,
+	// stock status, description, SEO meta, multiple images) so a vendor
+	// submission and an admin-entered product collect the same information -
+	// the only additions are the vendor's own supply price and quantity,
+	// which have no admin-side equivalent. Images are staged into
+	// tbl_vendor_product_image (same upload/product/ folder admin products
+	// use) and promoted into tbl_product_image on approval - see
+	// AdminVendor::vendorProductReview().
+	//
+	// ?id=<encrypted vendor_product_id> switches this into edit mode for an
+	// existing submission. Pricing (vendor_supply_price, proposed_market_price)
+	// is locked once submitted - the form renders those fields disabled and,
+	// regardless of what a tampered request sends, the save below never
+	// writes to them in edit mode; only a brand-new submission sets prices.
+	// The actual sale price is never vendor-set at all - see
+	// AdminVendor::vendorProductReview(). Editing anything else on an already-approved
+	// product doesn't touch the live catalog - it resets this submission to
+	// Pending so admin re-reviews the change before it goes live.
 	public function productAdd()
 	{
 		$this->requireLogin();
 		$vendorId = sessionId('vendor_id');
 
+		$id = $this->input->get('id');
+		$vendorProductId = $id ? decryptId($id) : null;
+		$existing = null;
+		if ($vendorProductId) {
+			$existing = $this->CommonModel->getSingleRowById('vendor_product', ['vendor_product_id' => $vendorProductId]);
+			// Scoped to the caller's own submissions - never trust a
+			// client-supplied vendor_product_id alone (IDOR).
+			if (!$existing || $existing['vendor_id'] != $vendorId) {
+				show_404();
+			}
+		}
+
 		if (count($_POST) > 0) {
 			$this->form_validation->set_rules('product_name', 'Product Name', 'trim|required|max_length[191]');
-			$this->form_validation->set_rules('vendor_supply_price', 'Supply Price', 'trim|required|numeric|greater_than[0]');
-			$this->form_validation->set_rules('quantity_supplied', 'Quantity', 'trim|required|numeric|greater_than[0]');
+			$this->form_validation->set_rules('category_id', 'Category', 'trim|required');
+			$this->form_validation->set_rules('sub_category_id[]', 'Sub Category', 'required');
+			$this->form_validation->set_rules('description', 'Description', 'trim|required');
+			$this->form_validation->set_rules('quantity_supplied', 'Stock Available', 'trim|required|numeric|greater_than[0]');
+			if (!$existing) {
+				// Pricing is only ever collected on the original submission.
+				// Sale price is never collected here at all - that's entirely
+				// admin's call, calculated from commission on the review screen
+				// (see AdminVendor::vendorProductReview()).
+				$this->form_validation->set_rules('proposed_market_price', 'Market Price', 'trim|required|numeric|greater_than[0]');
+				$this->form_validation->set_rules('vendor_supply_price', 'Your Supply Price', 'trim|required|numeric|greater_than[0]');
+			}
 			$this->form_validation->set_error_delimiters('<div class="text-danger">', '</div>');
 
 			if ($this->form_validation->run()) {
-				$this->CommonModel->insertRow('vendor_product', [
+				$subCategoryId = $this->input->post('sub_category_id');
+				$subCategoryTypeId = $this->input->post('sub_category_type_id');
+
+				$post = [
 					'vendor_id' => $vendorId,
 					'product_name' => $this->input->post('product_name'),
-					'category_id' => $this->input->post('category_id') ?: null,
+					'category_id' => $this->input->post('category_id'),
+					'sub_category_id' => !empty($subCategoryId) ? (is_array($subCategoryId) ? implode(',', $subCategoryId) : $subCategoryId) : null,
+					'sub_category_type_id' => !empty($subCategoryTypeId) ? (is_array($subCategoryTypeId) ? implode(',', $subCategoryTypeId) : $subCategoryTypeId) : null,
+					'product_type' => $this->input->post('product_type') ?: 1,
 					'description' => $this->input->post('description'),
-					'vendor_supply_price' => $this->input->post('vendor_supply_price'),
-					'proposed_sale_price' => $this->input->post('proposed_sale_price') ?: null,
 					'quantity_supplied' => $this->input->post('quantity_supplied'),
-					'status' => 0,
-				]);
-				$this->CommonModel->logAdminActivity(ACTOR_TYPE_VENDOR, $vendorId, 'vendor_product_submit', 'vendor_product', null, null, ['product_name' => $this->input->post('product_name')]);
-				flashData('errors', 'Product submitted for admin review.');
+					'is_out_of_stock' => $this->input->post('is_out_of_stock') ? 1 : 0,
+					'meta_title' => trim((string) $this->input->post('meta_title')),
+					'meta_description' => trim((string) $this->input->post('meta_description')),
+					'meta_keywords' => trim((string) $this->input->post('meta_keywords')),
+				];
+
+				if ($existing) {
+					// Pricing keys are deliberately absent from $post here, so
+					// updateRowById() leaves vendor_supply_price/
+					// proposed_market_price exactly as they were - no path in
+					// edit mode ever writes to them.
+					$post['status'] = 0;
+					$this->CommonModel->updateRowById('vendor_product', 'vendor_product_id', $vendorProductId, $post);
+					$this->CommonModel->logAdminActivity(ACTOR_TYPE_VENDOR, $vendorId, 'vendor_product_edit', 'vendor_product', $vendorProductId);
+					$message = 'Product updated and resubmitted for admin review.';
+				} else {
+					$post['vendor_supply_price'] = $this->input->post('vendor_supply_price');
+					$post['proposed_market_price'] = $this->input->post('proposed_market_price');
+					$post['status'] = 0;
+					$vendorProductId = $this->CommonModel->insertRowReturnId('vendor_product', $post);
+					$this->CommonModel->logAdminActivity(ACTOR_TYPE_VENDOR, $vendorId, 'vendor_product_submit', 'vendor_product', $vendorProductId, null, ['product_name' => $post['product_name']]);
+					$message = 'Product submitted for admin review.';
+				}
+
+				if ($vendorProductId && !empty($_FILES['image']['name'][0])) {
+					$filesCount = count($_FILES['image']['name']);
+					for ($i = 0; $i < $filesCount; $i++) {
+						if ($_FILES['image']['name'][$i] === '' || $_FILES['image']['size'][$i] > MAX_PRODUCT_IMAGE_SIZE || $_FILES['image']['error'][$i] !== UPLOAD_ERR_OK) {
+							continue;
+						}
+						$extension = pathinfo($_FILES['image']['name'][$i], PATHINFO_EXTENSION);
+						$_FILES['files']['name'] = round(microtime(true) * 1000) . '_' . $i . '.' . $extension;
+						$_FILES['files']['type'] = $_FILES['image']['type'][$i];
+						$_FILES['files']['tmp_name'] = $_FILES['image']['tmp_name'][$i];
+						$_FILES['files']['error'] = $_FILES['image']['error'][$i];
+						$_FILES['files']['size'] = $_FILES['image']['size'][$i];
+
+						$picture = fullImage('files', PRODUCT_IMAGE, "", MAX_PRODUCT_IMAGE_SIZE);
+						if ($picture) {
+							$this->CommonModel->insertRow('vendor_product_image', [
+								'vendor_product_id' => $vendorProductId,
+								'image_path' => $picture,
+							]);
+						}
+					}
+				}
+
+				flashData('errors', $message);
 				redirect('vendor/products');
 				return;
 			}
 			flashData('errors', validation_errors());
 		}
 
-		$data['title'] = 'Submit New Product';
+		$data['title'] = $existing ? 'Edit Product' : 'Submit New Product';
 		$data['categories'] = $this->CommonModel->getRowByIdInOrder('category', "is_delete = '1'", 'category_name', 'ASC') ?: [];
+		$data['vp'] = $existing;
+		$data['id'] = $id;
+		$data['sub_categories'] = [];
+		$data['sub_category_type_options'] = [];
+		$data['selected_sub_category_id'] = [];
+		$data['selected_sub_category_type_id'] = [];
+		if ($existing) {
+			$data['selected_sub_category_id'] = !empty($existing['sub_category_id']) ? explode(',', $existing['sub_category_id']) : [];
+			$data['selected_sub_category_type_id'] = !empty($existing['sub_category_type_id']) ? explode(',', $existing['sub_category_type_id']) : [];
+			$data['sub_categories'] = $this->CommonModel->getRowByIdInOrder('sub_category', ['category_id' => $existing['category_id'], 'is_delete' => '1'], 'sub_category_name', 'ASC') ?: [];
+			if ($data['selected_sub_category_id']) {
+				$data['sub_category_type_options'] = $this->CommonModel->getRowByWhereIn('sub_category_type', 'sub_category_id', $data['selected_sub_category_id']) ?: [];
+			}
+			$data['images'] = $this->CommonModel->getRowByMoreId('vendor_product_image', ['vendor_product_id' => $vendorProductId]) ?: [];
+		}
 		$this->load->view('vendor/product_add', $data);
+	}
+
+	// Delete one of the vendor's own staged product images (before or after
+	// submission). Scoped through a join back to vendor_product so a vendor
+	// can never delete another vendor's image by guessing an id.
+	public function productImageDelete()
+	{
+		$this->requireLogin();
+		$vendorId = sessionId('vendor_id');
+		$imageId = decryptId($this->input->post('id'));
+
+		$image = $this->CommonModel->getRowWithMultiJoin(
+			'vendor_product_image.*',
+			'vendor_product_image',
+			"vendor_product_image.vendor_product_image_id = '$imageId' AND vendor_product.vendor_id = '$vendorId'",
+			[['vendor_product', 'vendor_product.vendor_product_id = vendor_product_image.vendor_product_id']],
+			'',
+			'',
+			2
+		);
+		if (!$image) {
+			echo json_encode(['status' => false, 'message' => 'Image not found.']);
+			return;
+		}
+
+		$path = FCPATH . PRODUCT_IMAGE . $image['image_path'];
+		if (file_exists($path)) {
+			unlink($path);
+		}
+		$this->CommonModel->deleteRowById('vendor_product_image', ['vendor_product_image_id' => $imageId]);
+		echo json_encode(['status' => true, 'message' => 'Image deleted.']);
+	}
+
+	// Mirrors AdminProduct::getSubCategory()/getSubCategoryType() so the
+	// vendor submission form's category cascade works identically - kept as
+	// its own vendor-session-gated copy rather than reusing AdminProduct's
+	// endpoints directly, since those require an admin session a vendor
+	// never has. Reuses the exact same fragment views (plain <option> lists,
+	// not admin-specific markup).
+	public function getSubCategory()
+	{
+		$this->requireLogin();
+		$data['type'] = 1;
+		$data['all_data'] = $this->CommonModel->getRowByIdInOrder('sub_category', ['category_id' => $this->input->post('category_id'), 'is_delete' => '1'], 'sub_category_name', 'ASC');
+		$this->load->view('admin/product/sub_category_list', $data);
+	}
+
+	public function getSubCategoryType()
+	{
+		$this->requireLogin();
+		$subCategoryId = $this->input->post('sub_category_id');
+		if (is_array($subCategoryId)) {
+			$data['all_data'] = $this->CommonModel->getRowByWhereIn('sub_category_type', 'sub_category_id', $subCategoryId);
+		} else {
+			$data['all_data'] = $this->CommonModel->getRowByIdInOrder('sub_category_type', ['sub_category_id' => $subCategoryId, 'is_delete' => '1'], 'sub_category_type_name', 'ASC');
+		}
+		$this->load->view('admin/product/sub_category_type_list', $data);
 	}
 
 	public function orders()
@@ -358,6 +519,16 @@ class Vendor extends CI_Controller
 					'city' => $this->input->post('city'),
 					'state' => $this->input->post('state'),
 					'postal_code' => $this->input->post('postal_code'),
+					// Warehouse/pickup address (used for Shiprocket order sync -
+					// see AdminHome::shiprocketOrderDetails()). May differ from
+					// the business address above. The exact Shiprocket pickup
+					// nickname is admin-only (set from Vendors > Edit Vendor)
+					// since only admin has access to register it there.
+					'pickup_address' => $this->input->post('pickup_address'),
+					'pickup_city' => $this->input->post('pickup_city'),
+					'pickup_state' => $this->input->post('pickup_state'),
+					'pickup_pincode' => $this->input->post('pickup_pincode'),
+					'pickup_phone' => $this->input->post('pickup_phone'),
 					'bank_account_name' => $this->input->post('bank_account_name'),
 					'bank_account_no' => $this->input->post('bank_account_no'),
 					'bank_ifsc' => $this->input->post('bank_ifsc'),

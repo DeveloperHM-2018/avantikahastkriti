@@ -23,9 +23,49 @@
                                 <tr><th>GST</th><td><?= $vendor['gst_number'] ?: '-' ?></td></tr>
                                 <tr><th>PAN</th><td><?= $vendor['pan_number'] ?: '-' ?></td></tr>
                                 <tr><th>Address</th><td><?= $vendor['address'] ?>, <?= $vendor['city'] ?>, <?= $vendor['state'] ?> - <?= $vendor['postal_code'] ?></td></tr>
+                                <tr>
+                                    <th>Pickup Address</th>
+                                    <td>
+                                        <?php if (!empty($vendor['pickup_address'])) : ?>
+                                            <?= $vendor['pickup_address'] ?>, <?= $vendor['pickup_city'] ?>, <?= $vendor['pickup_state'] ?> - <?= $vendor['pickup_pincode'] ?>
+                                            (<?= $vendor['pickup_phone'] ?: 'no phone on file' ?>)
+                                        <?php else : ?>
+                                            Not set - ships from default warehouse
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Shiprocket Pickup Nickname</th>
+                                    <td>
+                                        <?php if (!empty($vendor['shiprocket_pickup_nickname'])) : ?>
+                                            <code><?= $vendor['shiprocket_pickup_nickname'] ?></code>
+                                            <div class="form-text">To change the address, register a new nickname below - Shiprocket doesn't support editing an existing one via this.</div>
+                                        <?php elseif (empty($vendor['pickup_address'])) : ?>
+                                            <span class="text-muted">Not registered - <a href="<?= base_url('vendorAdd?id=' . $id) ?>">add a pickup address</a> first</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
                                 <tr><th>Bank</th><td><?= $vendor['bank_account_name'] ?> - <?= $vendor['bank_account_no'] ?> (<?= $vendor['bank_ifsc'] ?>)</td></tr>
                                 <tr><th>Status</th><td><?= ['Pending', 'Active', 'Rejected', 'Suspended'][$vendor['status']] ?></td></tr>
                             </table>
+
+                            <?php if (!empty($vendor['pickup_address'])) : ?>
+                                <hr>
+                                <h6><?= empty($vendor['shiprocket_pickup_nickname']) ? 'Register Pickup Location in Shiprocket' : 'Register a New Pickup Location' ?></h6>
+                                <form id="registerPickupForm" class="row g-2">
+                                    <input type="hidden" name="vendor_id" value="<?= $id ?>">
+                                    <div class="col-12">
+                                        <input type="text" class="form-control form-control-sm" name="nickname" id="pickup_nickname"
+                                            value="<?= strtolower(preg_replace('/[^a-z0-9]+/i', '-', trim($vendor['business_name'] . '-' . $vendor['vendor_id'])))  ?>"
+                                            placeholder="Nickname for this pickup location" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <button type="submit" class="btn btn-primary btn-sm">
+                                            <i class="fa fa-truck"></i> Register in Shiprocket
+                                        </button>
+                                    </div>
+                                </form>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <div class="card">
@@ -115,3 +155,21 @@
 </div>
 
 <?php $this->load->view('admin/template/footer'); ?>
+<script>
+    $('#registerPickupForm').on('submit', function(e) {
+        e.preventDefault();
+        var btn = $(this).find('button[type="submit"]');
+        btn.prop('disabled', true).html('<i class="fa fa-spin fa-spinner"></i> Registering...');
+        $.post('<?= base_url('registerShiprocketPickup') ?>', $(this).serialize(), function(res) {
+            alert(res.message);
+            if (res.status) {
+                location.reload();
+            } else {
+                btn.prop('disabled', false).html('<i class="fa fa-truck"></i> Register in Shiprocket');
+            }
+        }, 'json').fail(function() {
+            alert('Could not reach Shiprocket. Please try again.');
+            btn.prop('disabled', false).html('<i class="fa fa-truck"></i> Register in Shiprocket');
+        });
+    });
+</script>

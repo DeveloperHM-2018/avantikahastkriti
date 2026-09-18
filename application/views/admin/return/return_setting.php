@@ -66,9 +66,39 @@
                                             <input class="form-control" type="text" name="warehouse_email" value="<?= $warehouse_email ?>">
                                         </div>
                                     </div>
+                                    <div class="col-lg-6 mt-3">
+                                        <label class="col-form-label">Shiprocket Pickup Location <span class="text-danger">*</span></label>
+                                        <div class="col-md-12">
+                                            <input class="form-control" type="text" name="shiprocket_pickup_nickname" value="<?= $shiprocket_pickup_nickname ?>" required>
+                                            <small class="text-muted">Must exactly match a pickup location nickname already registered for this warehouse address in your Shiprocket account. Used as the default when syncing house-stocked orders.</small>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="text-center mt-4">
                                     <button type="submit" class="btn btn-primary w-md">Save</button>
+                                </div>
+                            </form>
+
+                            <hr class="mt-4">
+                            <h6><?= empty($shiprocket_pickup_nickname) ? 'Register This Address in Shiprocket' : 'Register a New Pickup Location' ?></h6>
+                            <p class="text-muted">
+                                Pushes the warehouse address above straight into Shiprocket instead of adding it by
+                                hand in their dashboard. Save the address fields first if you haven't yet.
+                                <?php if (!empty($shiprocket_pickup_nickname)) : ?>
+                                    Shiprocket doesn't support editing an existing pickup location via this - registering
+                                    again under a new nickname adds a separate one rather than updating <code><?= $shiprocket_pickup_nickname ?></code>.
+                                <?php endif; ?>
+                            </p>
+                            <form id="registerHousePickupForm" class="row g-2">
+                                <div class="col-12">
+                                    <input type="text" class="form-control form-control-sm" name="nickname" id="house_pickup_nickname"
+                                        value="<?= empty($shiprocket_pickup_nickname) ? 'work' : '' ?>"
+                                        placeholder="Nickname for this pickup location" required>
+                                </div>
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-primary btn-sm">
+                                        <i class="fa fa-truck"></i> Register in Shiprocket
+                                    </button>
                                 </div>
                             </form>
                         </div>
@@ -80,3 +110,21 @@
 </div>
 
 <?php $this->load->view('admin/template/footer'); ?>
+<script>
+    $('#registerHousePickupForm').on('submit', function(e) {
+        e.preventDefault();
+        var btn = $(this).find('button[type="submit"]');
+        btn.prop('disabled', true).html('<i class="fa fa-spin fa-spinner"></i> Registering...');
+        $.post('<?= base_url('registerHouseShiprocketPickup') ?>', $(this).serialize(), function(res) {
+            alert(res.message);
+            if (res.status) {
+                location.reload();
+            } else {
+                btn.prop('disabled', false).html('<i class="fa fa-truck"></i> Register in Shiprocket');
+            }
+        }, 'json').fail(function() {
+            alert('Could not reach Shiprocket. Please try again.');
+            btn.prop('disabled', false).html('<i class="fa fa-truck"></i> Register in Shiprocket');
+        });
+    });
+</script>

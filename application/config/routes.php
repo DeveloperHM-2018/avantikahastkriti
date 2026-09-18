@@ -133,6 +133,9 @@ $route['vendor/logout'] = 'Vendor/logout';
 $route['vendor/dashboard'] = 'Vendor/dashboard';
 $route['vendor/products'] = 'Vendor/products';
 $route['vendor/productAdd'] = 'Vendor/productAdd';
+$route['vendor/getSubCategory'] = 'Vendor/getSubCategory';
+$route['vendor/getSubCategoryType'] = 'Vendor/getSubCategoryType';
+$route['vendor/productImageDelete'] = 'Vendor/productImageDelete';
 $route['vendor/orders'] = 'Vendor/orders';
 $route['vendor/payouts'] = 'Vendor/payouts';
 $route['vendor/profile'] = 'Vendor/profile';
@@ -140,6 +143,7 @@ $route['vendor/profile'] = 'Vendor/profile';
 // ==> Vendor Management (admin-side)
 $route['vendorAll'] = 'AdminVendor/vendorAll';
 $route['vendorAdd'] = 'AdminVendor/vendorAdd';
+$route['registerShiprocketPickup'] = 'AdminVendor/registerShiprocketPickup';
 $route['vendorApprove/(:any)'] = 'AdminVendor/vendorApprove/$1';
 $route['vendorReject/(:any)'] = 'AdminVendor/vendorReject/$1';
 $route['vendorSuspend/(:any)'] = 'AdminVendor/vendorSuspend/$1';
@@ -189,6 +193,7 @@ $route['rejectReturn'] = 'AdminReturn/rejectReturn';
 $route['schedulePickup'] = 'AdminReturn/schedulePickup';
 $route['processRefund'] = 'AdminReturn/processRefund';
 $route['returnSetting'] = 'AdminReturn/returnSetting';
+$route['registerHouseShiprocketPickup'] = 'AdminReturn/registerShiprocketPickup';
 
 
 ///////////////////// API   ///////////////////////

@@ -20,10 +20,10 @@
                                     <tr>
                                         <th>Product</th>
                                         <th>Supply Price</th>
-                                        <th>Proposed Sale Price</th>
                                         <th>Quantity</th>
                                         <th>Status</th>
                                         <th>Admin Notes</th>
+                                        <th>Action</th>
                                     </tr>
                                 </thead>
                             </table>

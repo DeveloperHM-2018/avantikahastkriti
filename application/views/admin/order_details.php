@@ -261,7 +261,7 @@
                     <h5>Shipping Charge</h5>
                 </div>
                 <div class="col-lg-6">
-                    <h6><?= $all_details['shipping_charge'] == 0 ? 'Free' : number_format((float) $all_details['shipping_charge'], 2) . '&#8377;' ?></h6>
+                    <h6><?= (float) $all_details['delivery_charges'] == 0 ? 'Free' : number_format((float) $all_details['delivery_charges'], 2) . '&#8377;' ?></h6>
                 </div>
             </div>
             <?php

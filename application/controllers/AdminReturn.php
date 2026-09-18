@@ -647,9 +647,11 @@ class AdminReturn extends CI_Controller
 		$data['warehouse_pincode'] = set_value('warehouse_pincode') == false ? @$get['warehouse_pincode'] : set_value('warehouse_pincode');
 		$data['warehouse_phone'] = set_value('warehouse_phone') == false ? @$get['warehouse_phone'] : set_value('warehouse_phone');
 		$data['warehouse_email'] = set_value('warehouse_email') == false ? @$get['warehouse_email'] : set_value('warehouse_email');
+		$data['shiprocket_pickup_nickname'] = set_value('shiprocket_pickup_nickname') == false ? @$get['shiprocket_pickup_nickname'] : set_value('shiprocket_pickup_nickname');
 
 		if (count($_POST) > 0) {
 			$this->form_validation->set_rules('return_window_days', 'Return Window (Days)', 'required|numeric|greater_than[0]');
+			$this->form_validation->set_rules('shiprocket_pickup_nickname', 'Shiprocket Pickup Location', 'trim|required');
 			if ($this->form_validation->run()) {
 				$post['return_window_days'] = $this->input->post('return_window_days');
 				$post['warehouse_address'] = $this->input->post('warehouse_address');
@@ -658,11 +660,62 @@ class AdminReturn extends CI_Controller
 				$post['warehouse_pincode'] = $this->input->post('warehouse_pincode');
 				$post['warehouse_phone'] = $this->input->post('warehouse_phone');
 				$post['warehouse_email'] = $this->input->post('warehouse_email');
+				$post['shiprocket_pickup_nickname'] = $this->input->post('shiprocket_pickup_nickname');
 				$this->CommonModel->updateRowByIdWithOutXss('setting', "id = '1'", $post);
 				flashData('errors', 'Return Settings Updated Successfully');
 				redirect('returnSetting');
 			}
 		}
 		$this->load->view('admin/return/return_setting', $data);
+	}
+
+	// Pushes the house/default warehouse address straight into Shiprocket via
+	// their Add Pickup Location API, same as AdminVendor::registerShiprocketPickup()
+	// does for vendor addresses - avoids needing to log into the Shiprocket
+	// dashboard and add it there by hand. Re-running with a different
+	// nickname registers a new location rather than editing the existing
+	// one (Shiprocket has no reliable "update" for this via the API).
+	public function registerShiprocketPickup()
+	{
+		if (USER_TYPE != '1') {
+			echo json_encode(['status' => false, 'message' => 'You do not have permission to manage shipping settings.']);
+			return;
+		}
+
+		$setting = $this->CommonModel->getSingleRowById('setting', ['id' => 1]);
+		if (!$setting || empty($setting['warehouse_address']) || empty($setting['warehouse_city']) || empty($setting['warehouse_state']) || empty($setting['warehouse_pincode'])) {
+			echo json_encode(['status' => false, 'message' => 'Fill in the full warehouse address (address, city, state, pincode) below first, then save and try again.']);
+			return;
+		}
+
+		$nickname = trim((string) $this->input->post('nickname'));
+		if ($nickname === '') {
+			echo json_encode(['status' => false, 'message' => 'Enter a nickname for this pickup location.']);
+			return;
+		}
+
+		$this->load->library('shiprocket');
+		$response = $this->shiprocket->add_pickup_location([
+			'pickup_location' => $nickname,
+			'name' => APP_NAME,
+			'email' => $setting['warehouse_email'] ?: SHIPROCKET_EMAIL,
+			'phone' => preg_replace('/\D/', '', (string) $setting['warehouse_phone']),
+			'address' => $setting['warehouse_address'],
+			'address_2' => '',
+			'city' => $setting['warehouse_city'],
+			'state' => $setting['warehouse_state'],
+			'country' => 'India',
+			'pin_code' => $setting['warehouse_pincode'],
+		]);
+
+		if (!empty($response['pickup_id']) || !empty($response['success'])) {
+			$this->CommonModel->updateRowByIdWithOutXss('setting', "id = '1'", ['shiprocket_pickup_nickname' => $nickname]);
+			$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'house_shiprocket_pickup_register', 'setting', 1, null, ['nickname' => $nickname]);
+			echo json_encode(['status' => true, 'message' => 'Pickup location "' . $nickname . '" registered in Shiprocket and set as your default.']);
+			return;
+		}
+
+		$message = $response['message'] ?? (is_array($response) ? json_encode($response) : 'Unknown error from Shiprocket.');
+		echo json_encode(['status' => false, 'message' => 'Shiprocket rejected this: ' . $message]);
 	}
 }

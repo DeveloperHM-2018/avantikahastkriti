@@ -518,9 +518,9 @@ const openModalSimilarProduct = async (category) => {
                       <div class=''>
                           <div class="name text-button text-sm">${item.name}</div>
                           <div class="flex items-center gap-2 mt-1">
-                              <div class="product-price text-title text-sm">₹${item.price}.00</div>
+                              <div class="product-price text-title text-sm">₹${parseFloat(item.price).toFixed(2)}</div>
                               <div class="product-origin-price text-title text-xs text-secondary2">
-                                  <del>₹${item.originPrice}.00</del>
+                                  <del>₹${parseFloat(item.originPrice).toFixed(2)}</del>
                               </div>
                           </div>
                       </div>
@@ -592,9 +592,9 @@ const handleItemModalWishlist = () => {
                     <div class=''>
                         <div class="name text-button">${item.name}</div>
                         <div class="flex items-center gap-2 mt-2">
-                            <div class="product-price text-title">₹${item.price}.00</div>
+                            <div class="product-price text-title">₹${parseFloat(item.price).toFixed(2)}</div>
                             <div class="product-origin-price text-title text-secondary2">
-                                <del>₹${item.originPrice}.00</del>
+                                <del>₹${parseFloat(item.originPrice).toFixed(2)}</del>
                             </div>
                         </div>
                     </div>
@@ -748,7 +748,7 @@ const handleItemModalCart = () => {
                             ${variantText}
                             <div class="flex items-center justify-between gap-2 mt-3 w-full">
                                 <div class="flex items-center text-secondary2 capitalize">Qty: ${product.quantityPurchase}</div>
-                                <div class="product-price text-title">₹${product.price * product.quantityPurchase}.00</div>
+                                <div class="product-price text-title">₹${(product.price * product.quantityPurchase).toFixed(2)}</div>
                             </div>
                         </div>
                     </div>
@@ -759,7 +759,7 @@ const handleItemModalCart = () => {
       totalCart += product.price * product.quantityPurchase;
     });
     // Set money to freeship in cart
-    modalCart.querySelector(".total-cart").innerHTML = "₹" + totalCart + ".00";
+    modalCart.querySelector(".total-cart").innerHTML = "₹" + totalCart.toFixed(2);
   }
   const prdItems = listItemCart.querySelectorAll(".item");
   prdItems.forEach((prd) => {
@@ -1392,7 +1392,7 @@ const handleItemModalCompare = () => {
                     </div>
                     <div class=''>
                         <div class="name text-title">${item.name}</div>
-                        <div class="product-price text-title mt-2">₹${item.price}.00</div>
+                        <div class="product-price text-title mt-2">₹${parseFloat(item.price).toFixed(2)}</div>
                     </div>
                 </div>
                 <div
@@ -1521,10 +1521,10 @@ const handleItemModalQuickview = () => {
       arrOfStar;
     modalQuickviewMain.querySelector(
       ".product-infor .product-price"
-    ).innerHTML = "₹" + item.price + ".00";
+    ).innerHTML = "₹" + parseFloat(item.price).toFixed(2);
     modalQuickviewMain.querySelector(
       ".product-infor .product-origin-price del"
-    ).innerHTML = "₹" + item.originPrice + ".00";
+    ).innerHTML = "₹" + parseFloat(item.originPrice).toFixed(2);
     modalQuickviewMain.querySelector(".product-infor .product-sale").innerHTML =
       "-" + Math.floor(100 - (item.price / item.originPrice) * 100) + "%";
     modalQuickviewMain.querySelector(".product-infor .desc").innerHTML =
@@ -1925,12 +1925,12 @@ const createProductItem = (product) => {
     }
         <div
         class="product-price-block flex items-center gap-2 flex-wrap mt-1 duration-300 relative z-[1]">
-        <div class="product-price text-title">₹${product.price
-    }.00</div>
+        <div class="product-price text-title">₹${parseFloat(product.price).toFixed(2)
+    }</div>
         ${Math.floor(100 - (product.price / product.originPrice) * 100) > 0
       ? `
                 <div class="product-origin-price caption1 text-secondary2">
-                    <del>₹${product.originPrice}.00</del>
+                    <del>₹${parseFloat(product.originPrice).toFixed(2)}</del>
                 </div>
                 <div
                     class="product-sale caption1 font-medium bg-green px-3 py-0.5 inline-block rounded-full">
@@ -3032,7 +3032,7 @@ const createProductItemMarketplace = (product) => {
                         <div class="flex gap-0.5 mt-1">
                             ${arrOfStar}
                         </div>
-                        <span class="text-title inline-block mt-1">₹${product.price}.00</span>
+                        <span class="text-title inline-block mt-1">₹${parseFloat(product.price).toFixed(2)}</span>
                     </div>
     `;
 
@@ -4081,7 +4081,7 @@ if (listProductCompare) {
       );
       priceElement.innerHTML = `
                 <div class='price-item h-full flex items-center justify-center'>
-                    ₹${product.price}.00
+                    ₹${parseFloat(product.price).toFixed(2)}
                 </div>
             `;
 
@@ -4288,7 +4288,7 @@ const handleInforCart = async () => {
                     </div>
                 </div>
                 <div class="w-1/12 price flex items-center justify-center">
-                    <div class="text-title text-center">₹${product.price}.00<br></div>
+                    <div class="text-title text-center">₹${parseFloat(product.price).toFixed(2)}<br></div>
                 </div>
                 <div class="w-1/6 flex items-center justify-center">
                     <div
@@ -4299,7 +4299,7 @@ const handleInforCart = async () => {
                     </div>
                 </div>
                 <div class="w-1/6 flex total-price items-center justify-center">
-                    <div class="text-title text-center">₹${isOutOfStock ? 0 : product.price * product.quantityPurchase}.00
+                    <div class="text-title text-center">₹${(isOutOfStock ? 0 : product.price * product.quantityPurchase).toFixed(2)}
                     </div>
                 </div>
                 <div class="w-1/12 flex items-center justify-center">
@@ -4319,7 +4319,7 @@ const handleInforCart = async () => {
       quantityBlock.querySelector(".ph-plus").addEventListener("click", () => {
         product.quantityPurchase = product.quantityPurchase + 1;
         quantityProduct.textContent = product.quantityPurchase;
-        totalPriceProduct.textContent = `₹${product.quantityPurchase * product.price}.00`;
+        totalPriceProduct.textContent = `₹${(product.quantityPurchase * product.price).toFixed(2)}`;
 
         // Persist the new quantity before updateTotalCart() runs - it may
         // trigger a coupon revalidation that reads the cart straight from
@@ -4333,7 +4333,7 @@ const handleInforCart = async () => {
         if (product.quantityPurchase > 1) {
           product.quantityPurchase = product.quantityPurchase - 1;
           quantityProduct.textContent = product.quantityPurchase;
-          totalPriceProduct.textContent = `₹${product.quantityPurchase * product.price}.00`;
+          totalPriceProduct.textContent = `₹${(product.quantityPurchase * product.price).toFixed(2)}`;
 
           localStorage.setItem("cartStore", JSON.stringify(cartStore));
           updateTotalCart();
@@ -4531,7 +4531,7 @@ function renderProduct(product, isOutOfStock = false) {
       <div class="text-title">
         <span class="quantity">${product.quantityPurchase}</span>
         <span class="px-1">x</span>
-        <span>₹${isOutOfStock ? 0 : product.price}.00</span>
+        <span>₹${(isOutOfStock ? 0 : parseFloat(product.price)).toFixed(2)}</span>
       </div>
     </div>
   `;

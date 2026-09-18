@@ -150,6 +150,10 @@ class AdminVendor extends CI_Controller
 			}
 			$this->form_validation->set_rules('business_name', 'Business Name', 'trim|required|max_length[150]');
 			$this->form_validation->set_rules('contact_name', 'Contact Person', 'trim|required|max_length[100]');
+			// Every vendor needs a baseline commission so the product-approval
+			// screen always has something sensible to pre-fill (see
+			// vendorProductReview()) - admin can still override it per product.
+			$this->form_validation->set_rules('default_commission_percent', 'Default Commission %', 'trim|required|numeric|greater_than_equal_to[0]|less_than_equal_to[100]');
 			$this->form_validation->set_error_delimiters('<div class="text-danger">', '</div>');
 
 			if ($this->form_validation->run()) {
@@ -164,10 +168,19 @@ class AdminVendor extends CI_Controller
 					'city' => $this->input->post('city'),
 					'state' => $this->input->post('state'),
 					'postal_code' => $this->input->post('postal_code'),
+					'pickup_address' => $this->input->post('pickup_address'),
+					'pickup_city' => $this->input->post('pickup_city'),
+					'pickup_state' => $this->input->post('pickup_state'),
+					'pickup_pincode' => $this->input->post('pickup_pincode'),
+					'pickup_phone' => $this->input->post('pickup_phone'),
+					// Admin-only - must exactly match a pickup location nickname
+					// already registered for this vendor in the Shiprocket
+					// dashboard (see CommonModel::getOrderShippingSource()).
+					'shiprocket_pickup_nickname' => trim((string) $this->input->post('shiprocket_pickup_nickname')) ?: null,
 					'bank_account_name' => $this->input->post('bank_account_name'),
 					'bank_account_no' => $this->input->post('bank_account_no'),
 					'bank_ifsc' => $this->input->post('bank_ifsc'),
-					'default_commission_percent' => $this->input->post('default_commission_percent') ?: null,
+					'default_commission_percent' => $this->input->post('default_commission_percent'),
 					'status' => (int) $this->input->post('status'),
 				];
 				if ($this->input->post('password') != '') {
@@ -203,6 +216,70 @@ class AdminVendor extends CI_Controller
 		$data['vendor'] = $vendor ?: [];
 		$data['id'] = $id;
 		$this->load->view('admin/vendor/vendor_add', $data);
+	}
+
+	// Pushes a vendor's pickup address straight into Shiprocket via their
+	// Add Pickup Location API, instead of admin having to log into the
+	// Shiprocket dashboard and add it by hand. The nickname sent here is
+	// exactly what gets stored as shiprocket_pickup_nickname and later used
+	// as `pickup_location` when creating orders for this vendor (see
+	// CommonModel::getOrderShippingSource()). Shiprocket has no reliable
+	// "update" for a pickup location via this API - re-running this with a
+	// different nickname registers a new location rather than editing the
+	// existing one, so changing an already-registered address means picking
+	// a new nickname.
+	public function registerShiprocketPickup()
+	{
+		if (!$this->canApproveVendor()) {
+			echo json_encode(['status' => false, 'message' => 'You do not have permission to manage vendor shipping.']);
+			return;
+		}
+
+		$vendorId = decryptId($this->input->post('vendor_id'));
+		$vendor = $this->CommonModel->getSingleRowById('vendor', ['vendor_id' => $vendorId]);
+		if (!$vendor) {
+			echo json_encode(['status' => false, 'message' => 'Vendor not found.']);
+			return;
+		}
+		if (empty($vendor['pickup_address']) || empty($vendor['pickup_city']) || empty($vendor['pickup_state']) || empty($vendor['pickup_pincode'])) {
+			echo json_encode(['status' => false, 'message' => 'This vendor has no complete pickup address yet - fill in address, city, state and pincode first (Edit Vendor, or ask the vendor to add it from their dashboard).']);
+			return;
+		}
+
+		$nickname = trim((string) $this->input->post('nickname'));
+		if ($nickname === '') {
+			echo json_encode(['status' => false, 'message' => 'Enter a nickname for this pickup location.']);
+			return;
+		}
+
+		$this->load->library('shiprocket');
+		$response = $this->shiprocket->add_pickup_location([
+			'pickup_location' => $nickname,
+			'name' => $vendor['contact_name'] ?: $vendor['business_name'],
+			'email' => $vendor['email_id'],
+			'phone' => preg_replace('/\D/', '', $vendor['pickup_phone'] ?: $vendor['contact_no']),
+			'address' => $vendor['pickup_address'],
+			'address_2' => '',
+			'city' => $vendor['pickup_city'],
+			'state' => $vendor['pickup_state'],
+			'country' => 'India',
+			'pin_code' => $vendor['pickup_pincode'],
+		]);
+
+		// Shiprocket's success signal varies by account/API version - a
+		// pickup_id or an explicit success flag both indicate the location
+		// was actually created; anything else is treated as a failure and
+		// the raw message is surfaced so admin can see exactly why (a
+		// duplicate nickname, an invalid pincode, etc.).
+		if (!empty($response['pickup_id']) || !empty($response['success'])) {
+			$this->CommonModel->updateRowById('vendor', 'vendor_id', $vendorId, ['shiprocket_pickup_nickname' => $nickname]);
+			$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'vendor_shiprocket_pickup_register', 'vendor', $vendorId, null, ['nickname' => $nickname]);
+			echo json_encode(['status' => true, 'message' => 'Pickup location "' . $nickname . '" registered in Shiprocket and linked to this vendor.']);
+			return;
+		}
+
+		$message = $response['message'] ?? (is_array($response) ? json_encode($response) : 'Unknown error from Shiprocket.');
+		echo json_encode(['status' => false, 'message' => 'Shiprocket rejected this: ' . $message]);
 	}
 
 	private function setVendorStatus($encId, $status, $action)
@@ -370,6 +447,7 @@ class AdminVendor extends CI_Controller
 			$action = $this->input->post('decision');
 			if ($action === 'approve') {
 				$this->form_validation->set_rules('commission_percent', 'Commission %', 'required|numeric|greater_than_equal_to[0]|less_than_equal_to[100]');
+				$this->form_validation->set_rules('market_price', 'Market Price', 'required|numeric|greater_than[0]');
 				$this->form_validation->set_rules('sale_price', 'Sale Price', 'required|numeric|greater_than[0]');
 				$this->form_validation->set_error_delimiters('<div class="text-danger">', '</div>');
 				if (!$this->form_validation->run()) {
@@ -379,46 +457,69 @@ class AdminVendor extends CI_Controller
 				}
 
 				$commissionPercent = $this->input->post('commission_percent');
+				$marketPrice = $this->input->post('market_price');
 				$salePrice = $this->input->post('sale_price');
 
-				// Promote into the live catalog. Editable by admin before
-				// publishing, per the spec - admin_notes/price/category here
-				// can differ from what the vendor originally proposed.
+				// Promote into the live catalog, carrying every field the
+				// vendor submitted (same field set as AdminProduct::productAdd())
+				// - editable by admin before publishing, per the spec:
+				// admin_notes/price/category here can differ from what the
+				// vendor originally proposed. Quantity/max_quantity/is_out_of_stock
+				// are deliberately kept out of this shared field set - those are
+				// only ever moved through applyStockRestock()'s ledger-writing
+				// path below, never overwritten directly, so re-supplying an
+				// existing product can't double-count or skip the audit trail.
 				$productId = $vp['product_id'];
-				$productData = [
+				$catalogFields = [
 					'product_name' => $vp['product_name'],
 					'category_id' => $vp['category_id'] ?: 1,
+					'sub_category_id' => $vp['sub_category_id'],
+					'sub_category_type_id' => $vp['sub_category_type_id'],
 					'description' => $vp['description'] ?: $vp['product_name'],
-					'product_type' => 1,
-					'market_price' => $salePrice,
+					'product_type' => $vp['product_type'] ?: 1,
+					'market_price' => $marketPrice,
 					'sale_price' => $salePrice,
-					'max_quantity' => $vp['quantity_supplied'],
-					'quantity' => $vp['quantity_supplied'],
-					'quantity_type' => 'pcs',
 					'is_delete' => 1,
 					'status' => 1,
-					'is_out_of_stock' => $vp['quantity_supplied'] > 0 ? 0 : 1,
+					'meta_title' => $vp['meta_title'],
+					'meta_description' => $vp['meta_description'],
+					'meta_keywords' => $vp['meta_keywords'],
 					'default_vendor_id' => $vp['vendor_id'],
 				];
 
+				// A vendor can edit and resubmit an already-approved product
+				// (see Vendor::productAdd()), which comes back through this same
+				// approve path - so quantity_supplied here may already have been
+				// credited to stock once before. Only the un-applied remainder
+				// (usually 0, for a purely descriptive edit) is ever added.
+				$quantityDelta = (float) $vp['quantity_supplied'] - (float) $vp['quantity_applied'];
+
 				if ($productId) {
-					// Re-supply of an already-linked product: add to existing
-					// stock through the normal ledger-writing path instead of
-					// overwriting the quantity column directly.
-					$this->CommonModel->updateRowById('product', 'product_id', $productId, ['default_vendor_id' => $vp['vendor_id']]);
-					$this->CommonModel->applyStockRestock($productId, null, $vp['quantity_supplied'], [
-						'change_type' => 'vendor_supply_in',
-						'reference_type' => 'vendor_product',
-						'reference_id' => $vp['vendor_product_id'],
-						'vendor_id' => $vp['vendor_id'],
-						'changed_by_type' => ACTOR_TYPE_ADMIN,
-						'changed_by_id' => sessionId('admin_id'),
-					]);
+					// Re-supply of (or an edit to) an already-linked product:
+					// refresh the catalog fields, then add any not-yet-applied
+					// stock through the normal ledger-writing path.
+					$this->CommonModel->updateRowById('product', 'product_id', $productId, $catalogFields);
+					if ($quantityDelta > 0) {
+						$this->CommonModel->applyStockRestock($productId, null, $quantityDelta, [
+							'change_type' => 'vendor_supply_in',
+							'reference_type' => 'vendor_product',
+							'reference_id' => $vp['vendor_product_id'],
+							'vendor_id' => $vp['vendor_id'],
+							'changed_by_type' => ACTOR_TYPE_ADMIN,
+							'changed_by_id' => sessionId('admin_id'),
+						]);
+					}
 				} else {
-					// Opening quantity is already set on $productData above -
-					// this only records the ledger entry, it must not add to
-					// the quantity a second time.
-					$productId = $this->CommonModel->insertRowReturnId('product', $productData);
+					// New product: opening quantity/stock-status are set directly
+					// here (there's no prior ledger balance to derive them from),
+					// and recordInitialStockLedger() below only logs that opening
+					// balance - it must not add to the quantity a second time.
+					$productId = $this->CommonModel->insertRowReturnId('product', $catalogFields + [
+						'max_quantity' => $vp['quantity_supplied'],
+						'quantity' => $vp['quantity_supplied'],
+						'quantity_type' => 'pcs',
+						'is_out_of_stock' => ($vp['is_out_of_stock'] == 1 || $vp['quantity_supplied'] <= 0) ? 1 : 0,
+					]);
 					$this->CommonModel->recordInitialStockLedger($productId, null, $vp['quantity_supplied'], 'vendor_supply_in', [
 						'reference_type' => 'vendor_product',
 						'reference_id' => $vp['vendor_product_id'],
@@ -428,16 +529,32 @@ class AdminVendor extends CI_Controller
 					]);
 				}
 
+				// Promote only not-yet-promoted staged images into the live
+				// product's gallery (same table AdminProduct::productAdd() uses) -
+				// a re-approval after a descriptive edit must not re-copy images
+				// already on the live listing.
+				$stagedImages = $this->CommonModel->getRowByMoreId('vendor_product_image', ['vendor_product_id' => $vp['vendor_product_id'], 'promoted' => 0]) ?: [];
+				$hasMain = $this->CommonModel->getNumRows('product_image', ['product_id' => $productId, 'is_main' => 1]) > 0;
+				foreach ($stagedImages as $i => $img) {
+					$this->CommonModel->insertRow('product_image', [
+						'product_id' => $productId,
+						'image_path' => $img['image_path'],
+						'is_main' => (!$hasMain && $i === 0) ? 1 : 0,
+					]);
+					$this->CommonModel->updateRowByIdWithOutXss('vendor_product_image', "vendor_product_image_id = '{$img['vendor_product_image_id']}'", ['promoted' => 1]);
+				}
+
 				$this->CommonModel->updateRowById('vendor_product', 'vendor_product_id', $id, [
 					'product_id' => $productId,
+					'quantity_applied' => $vp['quantity_supplied'],
 					'commission_percent' => $commissionPercent,
-					'proposed_sale_price' => $salePrice,
+					'proposed_market_price' => $marketPrice,
 					'status' => 1,
 					'admin_notes' => $this->input->post('admin_notes'),
 					'reviewed_by' => sessionId('admin_id'),
 					'reviewed_date' => date('Y-m-d H:i:s'),
 				]);
-				$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'vendor_product_approve', 'vendor_product', $id, null, ['commission_percent' => $commissionPercent, 'sale_price' => $salePrice]);
+				$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'vendor_product_approve', 'vendor_product', $id, null, ['commission_percent' => $commissionPercent, 'market_price' => $marketPrice, 'sale_price' => $salePrice]);
 				flashData('errors', 'Vendor product approved and published.');
 			} else {
 				$this->CommonModel->updateRowById('vendor_product', 'vendor_product_id', $id, [
@@ -458,6 +575,18 @@ class AdminVendor extends CI_Controller
 		$data['id'] = $this->input->get('id');
 		$data['vendor'] = $this->CommonModel->getSingleRowById('vendor', ['vendor_id' => $vp['vendor_id']]);
 		$data['can_approve'] = $this->canApproveProduct();
+		$data['images'] = $this->CommonModel->getRowByMoreId('vendor_product_image', ['vendor_product_id' => $id]) ?: [];
+		$data['category'] = $vp['category_id'] ? $this->CommonModel->getSingleRowById('category', ['category_id' => $vp['category_id']]) : false;
+		$data['sub_category_names'] = [];
+		if (!empty($vp['sub_category_id'])) {
+			$rows = $this->CommonModel->getRowByWhereIn('sub_category', 'sub_category_id', explode(',', $vp['sub_category_id']));
+			$data['sub_category_names'] = $rows ? array_column($rows, 'sub_category_name') : [];
+		}
+		$data['sub_category_type_names'] = [];
+		if (!empty($vp['sub_category_type_id'])) {
+			$rows = $this->CommonModel->getRowByWhereIn('sub_category_type', 'sub_category_type_id', explode(',', $vp['sub_category_type_id']));
+			$data['sub_category_type_names'] = $rows ? array_column($rows, 'sub_category_type_name') : [];
+		}
 		$this->load->view('admin/vendor/vendor_product_review', $data);
 	}
 

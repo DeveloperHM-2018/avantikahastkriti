@@ -380,13 +380,13 @@ productDetail.querySelector(".product-description").textContent =
       productDetail.querySelector(".productDesc").innerHTML =
         productMain.description;
       productDetail.querySelector(".product-price").innerHTML =
-        "₹" + productMain.price + ".00";
+        "₹" + parseFloat(productMain.price).toFixed(2);
       const discountPercent = Math.floor(
         100 - (productMain.price / productMain.originPrice) * 100
       );
       if (discountPercent > 0) {
         productDetail.querySelector(".product-origin-price").innerHTML =
-          "<del>₹" + productMain.originPrice + ".00</del>";
+          "<del>₹" + parseFloat(productMain.originPrice).toFixed(2) + "</del>";
         productDetail.querySelector(".product-origin-price").style.display = "";
         productDetail.querySelector(".product-sale").innerHTML =
           "-" + discountPercent + "%";
