@@ -831,6 +831,38 @@ class CommonModel extends CI_Model
 		}
 	}
 
+	// Determines who should physically ship an order, for Shiprocket sync
+	// (see AdminHome::shiprocketOrderDetails()/shipWithShiprocket()). Reads
+	// tbl_vendor_order_item, which only ever gets a row when a line's stock
+	// was actually attributed to a vendor at decrement time (see
+	// attributeVendorSale() above) - so this reflects who really fulfilled
+	// the order, not just which products happen to have a default vendor.
+	// Returns:
+	//   ['type' => 'house']                          - no vendor-sourced items
+	//   ['type' => 'vendor', 'vendor' => <row>]       - every item from one vendor
+	//   ['type' => 'mixed', 'vendor_count' => n]      - more than one vendor involved
+	// (a mixed order can also include house-stocked items alongside vendor
+	// ones - Shiprocket can't split one order across pickup addresses, so the
+	// caller falls back to the house pickup location and flags it for admin).
+	public function getOrderShippingSource($productBookId)
+	{
+		$rows = $this->runQuery(
+			"SELECT DISTINCT vendor_id FROM tbl_vendor_order_item WHERE product_book_id = " . (int) $productBookId,
+			1
+		);
+		if (!$rows) {
+			return ['type' => 'house'];
+		}
+		if (count($rows) > 1) {
+			return ['type' => 'mixed', 'vendor_count' => count($rows)];
+		}
+		$vendor = $this->getSingleRowById('vendor', ['vendor_id' => $rows[0]['vendor_id']]);
+		if (!$vendor) {
+			return ['type' => 'house'];
+		}
+		return ['type' => 'vendor', 'vendor' => $vendor];
+	}
+
 	// ==============================================================
 	// Admin/vendor activity audit log
 	// ==============================================================

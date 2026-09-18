@@ -369,11 +369,13 @@ $status = $this->input->get('status');
             </div>
             <form id="shiprocketSyncForm">
                 <div class="modal-body">
+                    <div id="sync_source_warning" class="alert alert-warning" style="display:none;"></div>
                     <input type="hidden" name="id" id="sync_id">
                     <div class="row">
                         <div class="col-lg-6 mb-3">
                             <label>Pickup Location</label>
-                            <input type="text" name="pickup_location" id="sync_pickup_location" class="form-control" value="work" required>
+                            <input type="text" name="pickup_location" id="sync_pickup_location" class="form-control" required>
+                            <small class="text-muted" id="sync_pickup_hint"></small>
                         </div>
                         <div class="col-lg-6 mb-3">
                             <label>Payment Method</label>
@@ -818,6 +820,9 @@ $status = $this->input->get('status');
             success: function(response) {
                 if (response.success) {
                     const parsed = response.data.parsed_address;
+                    const source = response.data.shipping_source || {
+                        type: 'house'
+                    };
                     $('#sync_name').val(response.data.name);
                     $('#sync_email').val(response.data.email_id || 'customer@example.com');
                     $('#sync_phone').val(response.data.contact_no);
@@ -827,6 +832,25 @@ $status = $this->input->get('status');
                     $('#sync_pincode').val(parsed.pincode);
                     $('#sync_state').val(parsed.state);
                     $('#sync_payment_method').val(response.data.payment_mode === 'COD' ? 'COD' : 'Prepaid');
+
+                    $('#sync_pickup_location').val(response.data.pickup_location);
+                    const warning = $('#sync_source_warning');
+                    const hint = $('#sync_pickup_hint');
+                    if (source.type === 'vendor') {
+                        hint.text('Auto-filled from ' + source.vendor_name + "'s vendor profile.");
+                        if (!source.nickname_registered) {
+                            warning.text('This order was fulfilled by ' + source.vendor_name + ', but no Shiprocket pickup nickname is set for them yet (Vendors > Edit Vendor) - falling back to the house pickup location below. Update it there once you\'ve registered their address in Shiprocket.').show();
+                        } else {
+                            warning.hide();
+                        }
+                    } else if (source.type === 'mixed') {
+                        hint.text('Defaulted to the house pickup location.');
+                        warning.text('This order contains items from ' + source.vendor_count + ' different vendors (or a mix of vendor and house stock) - Shiprocket can\'t split one order across pickup addresses. Review the order items and ship/adjust manually if needed before syncing.').show();
+                    } else {
+                        hint.text('House pickup location (default).');
+                        warning.hide();
+                    }
+
                     $('#shiprocketSyncModal').modal('show');
                 } else {
                     alert('Error fetching order details: ' + response.message);

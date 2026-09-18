@@ -99,6 +99,25 @@ class Shiprocket
         return $this->request('GET', 'courier/track/shipment/' . $shipment_id);
     }
 
+    /**
+     * Register a new pickup location (warehouse/vendor address) directly in
+     * the Shiprocket account, so it becomes usable as an order's
+     * `pickup_location` without needing to add it by hand in their dashboard
+     * first. See AdminVendor::registerShiprocketPickup().
+     *
+     * $data expects: pickup_location (the nickname - becomes the value later
+     * passed as `pickup_location` when creating orders), name, email, phone,
+     * address, address_2 (optional), city, state, country, pin_code.
+     *
+     * This has not been exercised against a live Shiprocket account - verify
+     * the exact response shape against a real call before relying on it in
+     * production, same caveat as create_return_order() above.
+     */
+    public function add_pickup_location($data)
+    {
+        return $this->request('POST', 'settings/company/addpickup', $data);
+    }
+
     protected function request($method, $endpoint, $params = [], $auth = true)
     {
         $url = $this->api_url . $endpoint;

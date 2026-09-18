@@ -398,7 +398,7 @@ class ProductVariantManager {
                 priceElement.textContent = `₹${price.toFixed(2)}`;
             }
             if (mainPriceElement) {
-                mainPriceElement.innerHTML = `₹${price.toFixed(0)}.00`;
+                mainPriceElement.innerHTML = `₹${price.toFixed(2)}`;
             }
 
             const originPrice = window.baseProductPricing
@@ -408,7 +408,7 @@ class ProductVariantManager {
 
             if (originPriceElement && saleElement) {
                 if (originPrice > 0 && discountPercent > 0) {
-                    originPriceElement.innerHTML = `<del>₹${originPrice}.00</del>`;
+                    originPriceElement.innerHTML = `<del>₹${originPrice.toFixed(2)}</del>`;
                     originPriceElement.style.display = "";
                     saleElement.innerHTML = `-${discountPercent}%`;
                     saleElement.style.display = "";

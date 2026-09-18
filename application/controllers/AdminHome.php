@@ -1722,6 +1722,28 @@ class AdminHome extends CI_Controller
 				'pincode' => $pincode
 			];
 
+			// Pickup location: house by default, or the vendor's registered
+			// Shiprocket nickname when every item in this order came from one
+			// vendor. A mixed-source order can't be split across pickup
+			// addresses through this flow, so it falls back to the house
+			// location and the admin is warned to resolve it manually.
+			$setting = $this->CommonModel->getSingleRowById('setting', ['id' => 1]);
+			$houseNickname = $setting && !empty($setting['shiprocket_pickup_nickname']) ? $setting['shiprocket_pickup_nickname'] : 'work';
+			$source = $this->CommonModel->getOrderShippingSource($id);
+
+			$order['shipping_source'] = ['type' => $source['type']];
+			if ($source['type'] === 'vendor') {
+				$vendor = $source['vendor'];
+				$order['pickup_location'] = !empty($vendor['shiprocket_pickup_nickname']) ? $vendor['shiprocket_pickup_nickname'] : $houseNickname;
+				$order['shipping_source']['vendor_name'] = $vendor['business_name'];
+				$order['shipping_source']['nickname_registered'] = !empty($vendor['shiprocket_pickup_nickname']);
+			} else {
+				$order['pickup_location'] = $houseNickname;
+				if ($source['type'] === 'mixed') {
+					$order['shipping_source']['vendor_count'] = $source['vendor_count'];
+				}
+			}
+
 			echo json_encode(['success' => true, 'data' => $order]);
 		} else {
 			echo json_encode(['success' => false, 'message' => 'Order not found']);
@@ -1778,11 +1800,19 @@ class AdminHome extends CI_Controller
 
 		$billing_pincode = trim($this->input->post('pincode'));
 
+		// Falls back to the house default (Return Settings) if the modal
+		// somehow submitted without one - the modal itself auto-fills this
+		// from the order's vendor attribution (see shiprocketOrderDetails()).
+		$pickupLocation = $this->input->post('pickup_location');
+		if (!$pickupLocation) {
+			$setting = $this->CommonModel->getSingleRowById('setting', ['id' => 1]);
+			$pickupLocation = $setting && !empty($setting['shiprocket_pickup_nickname']) ? $setting['shiprocket_pickup_nickname'] : 'work';
+		}
 
 		$shiprocket_data = [
 			'order_id' => $order['order_id'],
 			'order_date' => date('Y-m-d H:i', strtotime($order['booking_date'])),
-			'pickup_location' => $this->input->post('pickup_location') ?: 'home',
+			'pickup_location' => $pickupLocation,
 			'billing_customer_name' => $first_name,
 			'billing_last_name' => $last_name,
 			'billing_address' => $billing_address,

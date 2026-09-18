@@ -50,6 +50,40 @@
                                     <label class="col-md-3 col-form-label">Postal Code</label>
                                     <div class="col-md-9"><input class="form-control" type="text" name="postal_code" value="<?= $vendor['postal_code'] ?>"></div>
                                 </div>
+
+                                <h6 class="mt-3">Warehouse / Pickup Address</h6>
+                                <div class="alert alert-secondary">
+                                    Where we should collect your products from for shipping. Only fill this in if it's
+                                    different from your business address above.
+                                    <?php if (empty($vendor['shiprocket_pickup_nickname'])) : ?>
+                                        <br><strong>Not yet linked for shipping</strong> - once you save an address here, contact admin
+                                        so they can register it in Shiprocket. Until then, your orders ship from our
+                                        default warehouse.
+                                    <?php else : ?>
+                                        <br><strong>Linked for shipping</strong> - orders for your products will pick up from this address.
+                                    <?php endif; ?>
+                                </div>
+                                <div class="row mb-3">
+                                    <label class="col-md-3 col-form-label">Address</label>
+                                    <div class="col-md-9"><textarea class="form-control" name="pickup_address" rows="2"><?= $vendor['pickup_address'] ?></textarea></div>
+                                </div>
+                                <div class="row mb-3">
+                                    <label class="col-md-3 col-form-label">City</label>
+                                    <div class="col-md-9"><input class="form-control" type="text" name="pickup_city" value="<?= $vendor['pickup_city'] ?>"></div>
+                                </div>
+                                <div class="row mb-3">
+                                    <label class="col-md-3 col-form-label">State</label>
+                                    <div class="col-md-9"><input class="form-control" type="text" name="pickup_state" value="<?= $vendor['pickup_state'] ?>"></div>
+                                </div>
+                                <div class="row mb-3">
+                                    <label class="col-md-3 col-form-label">Pincode</label>
+                                    <div class="col-md-9"><input class="form-control" type="text" name="pickup_pincode" value="<?= $vendor['pickup_pincode'] ?>"></div>
+                                </div>
+                                <div class="row mb-3">
+                                    <label class="col-md-3 col-form-label">Contact Phone</label>
+                                    <div class="col-md-9"><input class="form-control" type="text" name="pickup_phone" value="<?= $vendor['pickup_phone'] ?>"></div>
+                                </div>
+
                                 <h6 class="mt-3">Bank Details</h6>
                                 <div class="row mb-3">
                                     <label class="col-md-3 col-form-label">Account Holder Name</label>

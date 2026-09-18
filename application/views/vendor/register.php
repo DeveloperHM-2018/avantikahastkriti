@@ -18,7 +18,7 @@
                             <div class="row">
                                 <div class="col-7">
                                     <div class="text-primary p-4">
-                                        <h5 class="text-primary">Become a Vendor</h5>
+                                        <h5 class="text-primary">Become a Partner</h5>
                                         <p>Register your business to start selling on</p>
                                         <h4 class="text-primary"><?= APP_NAME ?></h4>
                                     </div>
