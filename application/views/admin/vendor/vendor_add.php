@@ -27,7 +27,7 @@
                                 <h6>Business Details</h6>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label">Business / Vendor Name</label>
+                                        <label class="form-label">Business / Partner Name</label>
                                         <input class="form-control" type="text" name="business_name" value="<?= @$vendor['business_name'] ?>" required>
                                     </div>
                                     <div class="col-md-6 mb-3">
@@ -66,7 +66,7 @@
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Default Commission % <span class="text-danger">*</span></label>
                                         <input class="form-control" type="number" step="0.01" min="0" max="100" name="default_commission_percent" value="<?= @$vendor['default_commission_percent'] ?>" required>
-                                        <small class="text-muted">Used to pre-fill the commission when reviewing this vendor's products - can still be changed per product.</small>
+                                        <small class="text-muted">Used to pre-fill the commission when reviewing this partner's products - can still be changed per product.</small>
                                     </div>
                                 </div>
 
@@ -92,7 +92,7 @@
 
                                 <h6 class="mt-3">Warehouse / Pickup Address (for Shiprocket)</h6>
                                 <div class="alert alert-secondary">
-                                    Where orders for this vendor's products ship from. Vendor can also set this from
+                                    Where orders for this partner's products ship from. Partner can also set this from
                                     their own dashboard. Leave the address blank to ship from our default warehouse instead.
                                 </div>
                                 <div class="row">
@@ -119,7 +119,7 @@
                                     <div class="col-md-12 mb-3">
                                         <label class="form-label">Shiprocket Pickup Location Nickname</label>
                                         <input class="form-control" type="text" name="shiprocket_pickup_nickname" value="<?= @$vendor['shiprocket_pickup_nickname'] ?>" placeholder="e.g. vendor-rahul-warehouse">
-                                        <small class="text-muted">Register this vendor's pickup address in your Shiprocket dashboard first, then enter the exact nickname you gave it here - orders sourced from this vendor will use it automatically when syncing to Shiprocket. Leave blank to keep shipping their orders from the default warehouse.</small>
+                                        <small class="text-muted">Register this partner's pickup address in your Shiprocket dashboard first, then enter the exact nickname you gave it here - orders sourced from this vendor will use it automatically when syncing to Shiprocket. Leave blank to keep shipping their orders from the default warehouse.</small>
                                     </div>
                                 </div>
 
@@ -156,7 +156,7 @@
                                 </div>
 
                                 <div class="text-center">
-                                    <button type="submit" class="btn btn-primary w-md">Save Vendor</button>
+                                    <button type="submit" class="btn btn-primary w-md">Save Partner</button>
                                 </div>
                             </form>
                         </div>

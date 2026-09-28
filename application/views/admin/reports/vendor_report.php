@@ -28,7 +28,7 @@
             <div class="row">
                 <div class="col-md-4">
                     <div class="card"><div class="card-body">
-                        <p class="text-muted mb-1">Active Vendors</p>
+                        <p class="text-muted mb-1">Active Partners</p>
                         <h3><?= $active_vendors ?></h3>
                     </div></div>
                 </div>
@@ -40,7 +40,7 @@
                 </div>
                 <div class="col-md-4">
                     <div class="card"><div class="card-body">
-                        <p class="text-muted mb-1">Total Payable to Vendors</p>
+                        <p class="text-muted mb-1">Total Payable to Partners</p>
                         <h3>₹<?= number_format($total_payable, 2) ?></h3>
                     </div></div>
                 </div>
@@ -50,11 +50,11 @@
                 <div class="col-12">
                     <div class="card">
                         <div class="card-body">
-                            <h5>Vendor-wise Sales</h5>
+                            <h5>Partner-wise Sales</h5>
                             <table class="table table-bordered">
                                 <thead>
                                     <tr>
-                                        <th>Vendor</th>
+                                        <th>Partner</th>
                                         <th>Lines Sold</th>
                                         <th>Qty Sold</th>
                                         <th>Commission</th>

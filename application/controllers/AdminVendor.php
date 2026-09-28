@@ -75,12 +75,12 @@ class AdminVendor extends CI_Controller
 				if ($this->canApproveVendor()) {
 					$actions .= '<a href="' . base_url('vendorAdd?id=' . $id) . '" class="btn btn-secondary btn-sm"><i class="fa fa-edit"></i> Edit</a> ';
 					if ($record['status'] == 0) {
-						$actions .= '<a href="' . base_url('vendorApprove/' . $id) . '" class="btn btn-success btn-sm confirm_data" title="Approve Vendor" title-text="Approve this vendor?" icon="question"><i class="fa fa-check"></i> Approve</a> ';
-						$actions .= '<a href="' . base_url('vendorReject/' . $id) . '" class="btn btn-danger btn-sm confirm_data" title="Reject Vendor" title-text="Reject this vendor?" icon="warning"><i class="fa fa-times"></i> Reject</a>';
+						$actions .= '<a href="' . base_url('vendorApprove/' . $id) . '" class="btn btn-success btn-sm confirm_data" title="Approve Partner" title-text="Approve this partner?" icon="question"><i class="fa fa-check"></i> Approve</a> ';
+						$actions .= '<a href="' . base_url('vendorReject/' . $id) . '" class="btn btn-danger btn-sm confirm_data" title="Reject Partner" title-text="Reject this partner?" icon="warning"><i class="fa fa-times"></i> Reject</a>';
 					} elseif ($record['status'] == 1) {
-						$actions .= '<a href="' . base_url('vendorSuspend/' . $id) . '" class="btn btn-warning btn-sm confirm_data" title="Suspend Vendor" title-text="Suspend this vendor?" icon="warning"><i class="fa fa-ban"></i> Suspend</a>';
+						$actions .= '<a href="' . base_url('vendorSuspend/' . $id) . '" class="btn btn-warning btn-sm confirm_data" title="Suspend Partner" title-text="Suspend this partner?" icon="warning"><i class="fa fa-ban"></i> Suspend</a>';
 					} elseif ($record['status'] == 3) {
-						$actions .= '<a href="' . base_url('vendorActivate/' . $id) . '" class="btn btn-success btn-sm confirm_data" title="Activate Vendor" title-text="Re-activate this vendor?" icon="question"><i class="fa fa-check"></i> Activate</a>';
+						$actions .= '<a href="' . base_url('vendorActivate/' . $id) . '" class="btn btn-success btn-sm confirm_data" title="Activate Partner" title-text="Re-activate this partner?" icon="question"><i class="fa fa-check"></i> Activate</a>';
 					}
 				}
 
@@ -103,7 +103,7 @@ class AdminVendor extends CI_Controller
 			return;
 		}
 
-		$data['title'] = 'Vendors';
+		$data['title'] = 'Partners';
 		$table_header = [
 			['data' => 'business_name'],
 			['data' => 'contact_name'],
@@ -190,7 +190,7 @@ class AdminVendor extends CI_Controller
 				if ($vendorId) {
 					$this->CommonModel->updateRowById('vendor', 'vendor_id', $vendorId, $post);
 					$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'vendor_manual_edit', 'vendor', $vendorId);
-					flashData('errors', 'Vendor updated successfully.');
+					flashData('errors', 'Partner updated successfully.');
 				} else {
 					$post['status'] = $post['status'] ?: 1;
 					if ($post['status'] == 1) {
@@ -199,7 +199,7 @@ class AdminVendor extends CI_Controller
 					}
 					$vendorId = $this->CommonModel->insertRowReturnId('vendor', $post);
 					$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'vendor_manual_create', 'vendor', $vendorId, null, ['business_name' => $post['business_name']]);
-					flashData('errors', 'Vendor created successfully.');
+					flashData('errors', 'Partner created successfully.');
 				}
 
 				foreach (['gst_certificate' => 'gst_certificate', 'pan_card' => 'pan_card', 'bank_proof' => 'bank_proof'] as $field => $docType) {
@@ -212,7 +212,7 @@ class AdminVendor extends CI_Controller
 			flashData('errors', validation_errors());
 		}
 
-		$data['title'] = $vendorId ? 'Edit Vendor' : 'Add Vendor';
+		$data['title'] = $vendorId ? 'Edit Partner' : 'Add Partner';
 		$data['vendor'] = $vendor ?: [];
 		$data['id'] = $id;
 		$this->load->view('admin/vendor/vendor_add', $data);
@@ -231,18 +231,18 @@ class AdminVendor extends CI_Controller
 	public function registerShiprocketPickup()
 	{
 		if (!$this->canApproveVendor()) {
-			echo json_encode(['status' => false, 'message' => 'You do not have permission to manage vendor shipping.']);
+			echo json_encode(['status' => false, 'message' => 'You do not have permission to manage partner shipping.']);
 			return;
 		}
 
 		$vendorId = decryptId($this->input->post('vendor_id'));
 		$vendor = $this->CommonModel->getSingleRowById('vendor', ['vendor_id' => $vendorId]);
 		if (!$vendor) {
-			echo json_encode(['status' => false, 'message' => 'Vendor not found.']);
+			echo json_encode(['status' => false, 'message' => 'Partner not found.']);
 			return;
 		}
 		if (empty($vendor['pickup_address']) || empty($vendor['pickup_city']) || empty($vendor['pickup_state']) || empty($vendor['pickup_pincode'])) {
-			echo json_encode(['status' => false, 'message' => 'This vendor has no complete pickup address yet - fill in address, city, state and pincode first (Edit Vendor, or ask the vendor to add it from their dashboard).']);
+			echo json_encode(['status' => false, 'message' => 'This partner has no complete pickup address yet - fill in address, city, state and pincode first (Edit Partner, or ask the partner to add it from their dashboard).']);
 			return;
 		}
 
@@ -274,7 +274,7 @@ class AdminVendor extends CI_Controller
 		if (!empty($response['pickup_id']) || !empty($response['success'])) {
 			$this->CommonModel->updateRowById('vendor', 'vendor_id', $vendorId, ['shiprocket_pickup_nickname' => $nickname]);
 			$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'vendor_shiprocket_pickup_register', 'vendor', $vendorId, null, ['nickname' => $nickname]);
-			echo json_encode(['status' => true, 'message' => 'Pickup location "' . $nickname . '" registered in Shiprocket and linked to this vendor.']);
+			echo json_encode(['status' => true, 'message' => 'Pickup location "' . $nickname . '" registered in Shiprocket and linked to this partner.']);
 			return;
 		}
 
@@ -295,7 +295,7 @@ class AdminVendor extends CI_Controller
 		}
 		$this->CommonModel->updateRowById('vendor', 'vendor_id', $vendorId, $update);
 		$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), $action, 'vendor', $vendorId);
-		flashData('errors', 'Vendor updated.');
+		flashData('errors', 'Partner updated.');
 		redirect($_SERVER['HTTP_REFERER']);
 	}
 
@@ -330,7 +330,7 @@ class AdminVendor extends CI_Controller
 			show_404();
 		}
 
-		$data['title'] = 'Vendor - ' . $vendor['business_name'];
+		$data['title'] = 'Partner - ' . $vendor['business_name'];
 		$data['vendor'] = $vendor;
 		$data['id'] = $this->input->get('id');
 		$data['documents'] = $this->CommonModel->getRowByMoreId('vendor_document', ['vendor_id' => $id]) ?: [];
@@ -412,7 +412,7 @@ class AdminVendor extends CI_Controller
 			return;
 		}
 
-		$data['title'] = 'Vendor Product Approvals';
+		$data['title'] = 'Partner Product Approvals';
 		$table_header = [
 			['data' => 'business_name'],
 			['data' => 'product_name'],
@@ -440,7 +440,7 @@ class AdminVendor extends CI_Controller
 
 		if (count($_POST) > 0) {
 			if (!$this->canApproveProduct()) {
-				flashData('errors', 'You do not have permission to approve vendor products.');
+				flashData('errors', 'You do not have permission to approve partner products.');
 				redirect($_SERVER['HTTP_REFERER']);
 			}
 
@@ -555,7 +555,7 @@ class AdminVendor extends CI_Controller
 					'reviewed_date' => date('Y-m-d H:i:s'),
 				]);
 				$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'vendor_product_approve', 'vendor_product', $id, null, ['commission_percent' => $commissionPercent, 'market_price' => $marketPrice, 'sale_price' => $salePrice]);
-				flashData('errors', 'Vendor product approved and published.');
+				flashData('errors', 'Partner product approved and published.');
 			} else {
 				$this->CommonModel->updateRowById('vendor_product', 'vendor_product_id', $id, [
 					'status' => 2,
@@ -564,13 +564,13 @@ class AdminVendor extends CI_Controller
 					'reviewed_date' => date('Y-m-d H:i:s'),
 				]);
 				$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'vendor_product_reject', 'vendor_product', $id, null, ['admin_notes' => $this->input->post('admin_notes')]);
-				flashData('errors', 'Vendor product rejected.');
+				flashData('errors', 'Partner product rejected.');
 			}
 			redirect('vendorProductQueue');
 			return;
 		}
 
-		$data['title'] = 'Review Vendor Product';
+		$data['title'] = 'Review Partner Product';
 		$data['vp'] = $vp;
 		$data['id'] = $this->input->get('id');
 		$data['vendor'] = $this->CommonModel->getSingleRowById('vendor', ['vendor_id' => $vp['vendor_id']]);
@@ -598,7 +598,7 @@ class AdminVendor extends CI_Controller
 			show_404();
 		}
 
-		$data['title'] = 'Vendor Payouts';
+		$data['title'] = 'Partner Payouts';
 		$data['unpaid_summary'] = $this->CommonModel->runQuery(
 			"SELECT voi.vendor_id, vendor.business_name, SUM(voi.vendor_payable_amount) AS unpaid_amount, COUNT(*) AS unpaid_lines
 			FROM tbl_vendor_order_item voi
@@ -626,7 +626,7 @@ class AdminVendor extends CI_Controller
 		}
 		$vendorId = decryptId($this->input->post('vendor_id'));
 		if (!$vendorId) {
-			echo json_encode(['status' => false, 'message' => 'Invalid vendor.']);
+			echo json_encode(['status' => false, 'message' => 'Invalid partner.']);
 			return;
 		}
 
@@ -638,7 +638,7 @@ class AdminVendor extends CI_Controller
 		);
 		if (!$row || (float) $row['total'] <= 0) {
 			$this->db->trans_complete();
-			echo json_encode(['status' => false, 'message' => 'Nothing unpaid for this vendor.']);
+			echo json_encode(['status' => false, 'message' => 'Nothing unpaid for this partner.']);
 			return;
 		}
 

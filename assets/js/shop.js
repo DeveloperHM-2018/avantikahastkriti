@@ -101,8 +101,7 @@ rangeInput.forEach((input) => {
 
 // Function to fetch products from JSON file
 function fetchProducts() {
-	fetch(`${BASE_URL}Test/products`)
-		.then((response) => response.json())
+	getAllProducts()
 		.then((data) => {
 			productsData = data;
 			renderProducts(currentPage, productsData);

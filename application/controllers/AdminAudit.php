@@ -53,7 +53,7 @@ class AdminAudit extends CI_Controller
 			$data = [];
 			foreach ($allData['records'] as $record) {
 				$actor = $record['actor_type'] == ACTOR_TYPE_VENDOR
-					? ($record['vendor_name'] ?: ('Vendor #' . $record['vendor_id']))
+					? ($record['vendor_name'] ?: ('Partner #' . $record['vendor_id']))
 					: ($record['admin_name'] ?: ('Admin #' . $record['admin_id']));
 				$data[] = [
 					'create_date' => dateConvertToView($record['create_date'], 3),

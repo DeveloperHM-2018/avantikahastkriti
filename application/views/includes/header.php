@@ -33,7 +33,7 @@
                     <i class="icon-category text-2xl"></i>
                 </div>
                 <a href="<?= base_url() ?>" class="flex items-center">
-                    <div class="heading4 header-logo"><img src="<?= base_url() ?>assets/img/logo.jpg" alt="<?= $this->projectName ?>" width="80px"></div>
+                    <div class="heading4 header-logo"><img src="<?= base_url() ?>assets/img/logo-300.webp" alt="<?= $this->projectName ?>" width="80px"></div>
                 </a>
 
                 <div class="form-search w-2/3 pl-8 flex items-center h-[44px] max-lg:hidden">
@@ -209,7 +209,7 @@
                             <i class="ph ph-x text-sm"></i>
                         </div>
                         <a href="<?= base_url() ?>" class="logo text-3xl font-semibold text-center">
-                            <img src="<?= base_url() ?>assets/img/logo.jpg" alt="<?= $this->projectName ?>" width="50px">
+                            <img src="<?= base_url() ?>assets/img/logo-300.webp" alt="<?= $this->projectName ?>" width="50px" loading="lazy">
                         </a>
                     </div>
                     <div class="form-search relative mt-2">

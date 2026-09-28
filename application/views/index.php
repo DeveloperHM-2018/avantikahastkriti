@@ -307,7 +307,7 @@ include('includes/header.php');
 
 <div class="buy-pack-block md:py-20 py-10 md:mt-20 mt-10 relative hidden">
     <div class="bg-img absolute top-0 left-0 w-full h-full z-[-1]">
-        <img src="assets/images/banner/bg-buy-pack-organic.png" alt="bg-img" class="w-full h-full object-cover" />
+        <img src="<?= base_url() ?>assets/images/banner/bg-buy-pack-organic.png" alt="bg-img" class="w-full h-full object-cover" loading="lazy" />
     </div>
     <div class="container">
         <div class="heading">

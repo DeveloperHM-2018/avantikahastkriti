@@ -24,17 +24,17 @@
                     <div class="card">
                         <div class="card-body">
                             <table class="table table-sm table-borderless mb-3">
-                                <tr><th style="width:220px;">Vendor</th><td><?= $vendor['business_name'] ?></td></tr>
+                                <tr><th style="width:220px;">Partner</th><td><?= $vendor['business_name'] ?></td></tr>
                                 <tr><th>Product Name</th><td><?= $vp['product_name'] ?></td></tr>
                                 <tr><th>Category</th><td><?= $category ? $category['category_name'] : '-' ?></td></tr>
                                 <tr><th>Sub Category</th><td><?= $sub_category_names ? implode(', ', $sub_category_names) : '-' ?></td></tr>
                                 <tr><th>Sub Category Type</th><td><?= $sub_category_type_names ? implode(', ', $sub_category_type_names) : '-' ?></td></tr>
                                 <tr><th>Product Type</th><td><?= [1 => 'Normal', 2 => 'Featured', 3 => 'Both'][$vp['product_type']] ?? 'Normal' ?></td></tr>
                                 <tr><th>Description</th><td><?= $vp['description'] ?: '-' ?></td></tr>
-                                <tr><th>Vendor's Supply Price</th><td>₹<?= $vp['vendor_supply_price'] ?></td></tr>
-                                <tr><th>Vendor's Proposed Market Price</th><td><?= $vp['proposed_market_price'] ? '₹' . $vp['proposed_market_price'] : '-' ?></td></tr>
+                                <tr><th>Partner's Supply Price</th><td>₹<?= $vp['vendor_supply_price'] ?></td></tr>
+                                <tr><th>Partner's Proposed Market Price</th><td><?= $vp['proposed_market_price'] ? '₹' . $vp['proposed_market_price'] : '-' ?></td></tr>
                                 <tr><th>Quantity Offered</th><td><?= $vp['quantity_supplied'] ?></td></tr>
-                                <tr><th>Marked Out of Stock by Vendor</th><td><?= $vp['is_out_of_stock'] == 1 ? 'Yes' : 'No' ?></td></tr>
+                                <tr><th>Marked Out of Stock by Partner</th><td><?= $vp['is_out_of_stock'] == 1 ? 'Yes' : 'No' ?></td></tr>
                             </table>
 
                             <?php if (!empty($images)) : ?>
@@ -120,7 +120,7 @@
         var salePrice = VENDOR_SUPPLY_PRICE / (1 - commission / 100);
         salePrice = Math.round(salePrice * 100) / 100;
         $('#sale_price').val(salePrice);
-        hint.text('Calculated so the vendor nets ₹' + VENDOR_SUPPLY_PRICE.toFixed(2) + ' after ' + commission + '% commission (₹' + (salePrice - VENDOR_SUPPLY_PRICE).toFixed(2) + '). Edit directly to override.');
+        hint.text('Calculated so the partner nets ₹' + VENDOR_SUPPLY_PRICE.toFixed(2) + ' after ' + commission + '% commission (₹' + (salePrice - VENDOR_SUPPLY_PRICE).toFixed(2) + '). Edit directly to override.');
     }
 
     $('#commission_percent').on('input', recalcSalePrice);

@@ -7,7 +7,7 @@
                 <div class="col-12">
                     <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                         <h2 class="mb-sm-0 "><?= $title ?></h2>
-                        <a href="<?= base_url('vendorAdd') ?>" class="btn btn-primary"><i class="fa fa-plus"></i> Add Vendor</a>
+                        <a href="<?= base_url('vendorAdd') ?>" class="btn btn-primary"><i class="fa fa-plus"></i> Add Partner</a>
                     </div>
                 </div>
             </div>

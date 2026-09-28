@@ -106,18 +106,13 @@
                                         </select>
                                     </div>
                                     <div class="col-lg-6 mb-3">
-                                        <label class="form-label">Market Price (MRP) <span class="text-danger">*</span></label>
-                                        <input class="form-control" type="number" step="0.01" min="0.01" name="proposed_market_price" value="<?= @$vp['proposed_market_price'] ?>" <?= $vp ? 'disabled' : 'required' ?>>
-                                        <?php if ($vp) : ?><small class="text-muted">Locked after submission.</small><?php endif; ?>
-                                    </div>
-                                    <div class="col-lg-6 mb-3">
                                         <div class="form-check mt-4">
                                             <input class="form-check-input" type="checkbox" name="is_out_of_stock" id="is_out_of_stock" value="1" <?= @$vp['is_out_of_stock'] == 1 ? 'checked' : '' ?>>
                                             <label class="form-check-label" for="is_out_of_stock">Mark as Out of Stock</label>
                                         </div>
                                     </div>
                                     <div class="col-lg-6 mb-3">
-                                        <label class="form-label">Your Supply Price (what we pay you, per unit) <span class="text-danger">*</span></label>
+                                        <label class="form-label">Sale Price (per unit) <span class="text-danger">*</span></label>
                                         <input class="form-control" type="number" step="0.01" min="0.01" name="vendor_supply_price" value="<?= @$vp['vendor_supply_price'] ?>" <?= $vp ? 'disabled' : 'required' ?>>
                                         <?php if ($vp) : ?><small class="text-muted">Locked after submission.</small><?php endif; ?>
                                     </div>

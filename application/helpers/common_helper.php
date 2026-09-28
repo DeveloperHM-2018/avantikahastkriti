@@ -639,7 +639,11 @@ function sendTemplatedMail($eventKey, $toEmail, $placeholders = [])
 		$replace[] = $value;
 	}
 	$subject = str_replace($search, $replace, $template['subject']);
-	$body = str_replace($search, $replace, $template['body']);
+	$content = str_replace($search, $replace, $template['body']);
+	// Every notification email (vendor registration, order placed, OTP, etc.)
+	// shares this one branded HTML wrapper - templates in tbl_mail_template
+	// only ever need to hold their own message text, not a full HTML document.
+	$body = $ci->load->view('emails/layout', ['subject' => $subject, 'body' => $content], true);
 
 	$smtp = $ci->CommonModel->getSingleRowById('mail_smtp_setting', ['id' => 1]);
 	if (!$smtp || empty($smtp['smtp_host']) || empty($smtp['smtp_user'])) {

@@ -30,7 +30,7 @@
     <meta name="author" content="<?= $this->projectName ?>">
     <link rel="canonical" href="<?= current_url() ?>">
     <meta name="base-url" content="<?= base_url() ?>">
-    <link rel="shortcut icon" href="<?= base_url() ?>assets/img/logo.jpg" type="image/x-icon" />
+    <link rel="icon" href="<?= base_url() ?>assets/img/favicon-64.png" type="image/png" />
 
     <link rel="stylesheet" href="<?= base_url() ?>assets/css/swiper-bundle.min.css" />
     <link rel="stylesheet" href="<?= base_url() ?>assets/css/style.css" />

@@ -16,7 +16,7 @@
 					<div class="navbar-brand-box">
 						<a href="<?= base_url('vendor/dashboard') ?>" class="logo logo-light">
 							<span class="logo-lg">
-								<h2 style="color: #fff; margin-top: 20px;"><?= APP_NAME ?> Vendor Portal</h2>
+								<h2 style="color: #fff; margin-top: 20px;"><?= APP_NAME ?> Partner Portal</h2>
 							</span>
 						</a>
 					</div>

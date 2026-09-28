@@ -130,7 +130,7 @@ class AdminReports extends CI_Controller
 	public function purchaseReport()
 	{
 		$range = $this->dateRange();
-		$data['title'] = 'Purchase Report (Vendor Supply)';
+		$data['title'] = 'Purchase Report (Partner Supply)';
 		$data['date_from'] = $range['from'];
 		$data['date_to'] = $range['to'];
 
@@ -175,7 +175,7 @@ class AdminReports extends CI_Controller
 	public function vendorReport()
 	{
 		$range = $this->dateRange();
-		$data['title'] = 'Vendor Report';
+		$data['title'] = 'Partner Report';
 		$data['date_from'] = $range['from'];
 		$data['date_to'] = $range['to'];
 

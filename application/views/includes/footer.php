@@ -5,7 +5,7 @@
                 <div class="company-infor basis-1/4 max-lg:basis-full pr-7">
                     <a href="<?= base_url() ?>" class="logo inline-block">
                         <div class="heading3 w-fit">
-                            <img src="<?= base_url() ?>assets/img/logo.jpg" alt="<?= $this->projectName ?>" width="100px">
+                            <img src="<?= base_url() ?>assets/img/logo-300.webp" alt="<?= $this->projectName ?>" width="100px" loading="lazy">
                         </div>
                     </a>
                     <div class="">
@@ -34,7 +34,7 @@
                             <a class="caption1 has-line-before duration-300 w-fit pt-2" href="<?= base_url('profile') ?>"> My Account</a>
                             <a class="caption1 has-line-before duration-300 w-fit pt-2" href="<?= base_url('profile#orders') ?>"> Order & Returns</a>
                             <a class="caption1 has-line-before duration-300 w-fit pt-2" href="<?= base_url('vendor/register') ?>">Become a Partner</a>
-                            <a class="caption1 has-line-before duration-300 w-fit pt-2" href="<?= base_url('vendor/login') ?>">Vendor Login</a>
+                            <a class="caption1 has-line-before duration-300 w-fit pt-2" href="<?= base_url('vendor/login') ?>">Partner Login</a>
                         </div>
                         <div class="item flex flex-col basis-1/3 footer-quick-menus">
                             <div class="text-button-uppercase pb-3">Quick Shop</div>

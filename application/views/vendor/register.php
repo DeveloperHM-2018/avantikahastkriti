@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>Vendor Registration</title>
+    <title>Partner Registration</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <?php $this->load->view('admin/template/header_link'); ?>
 </head>
@@ -33,7 +33,7 @@
                                 <h6 class="mt-3">Business Details</h6>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label">Business / Vendor Name</label>
+                                        <label class="form-label">Business / Partner Name</label>
                                         <input class="form-control" type="text" name="business_name" required>
                                     </div>
                                     <div class="col-md-6 mb-3">

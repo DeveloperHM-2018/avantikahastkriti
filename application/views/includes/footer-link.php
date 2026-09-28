@@ -36,8 +36,8 @@
                                 </div>
                             </div>
                             <div class="product-img w-full h-full aspect-[3/4]">
-                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/14-1.png" alt="img" />
-                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/14-2.png" alt="img" />
+                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/14-1.webp" alt="img" loading="lazy" decoding="async" />
+                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/14-2.webp" alt="img" loading="lazy" decoding="async" />
                             </div>
                             <div class="list-action grid grid-cols-2 gap-3 px-5 absolute w-full bottom-5 max-lg:hidden">
                                 <div class="quick-view-btn w-full text-button-uppercase py-2 text-center rounded-full duration-300 bg-white hover:bg-black hover:text-white">Quick View</div>
@@ -100,8 +100,8 @@
                                 </div>
                             </div>
                             <div class="product-img w-full h-full aspect-[3/4]">
-                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/13-1.png" alt="img" />
-                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/13-2.png" alt="img" />
+                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/13-1.webp" alt="img" loading="lazy" decoding="async" />
+                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/13-2.webp" alt="img" loading="lazy" decoding="async" />
                             </div>
                             <div class="list-action grid grid-cols-2 gap-3 px-5 absolute w-full bottom-5 max-lg:hidden">
                                 <div class="quick-view-btn w-full text-button-uppercase py-2 text-center rounded-full duration-300 bg-white hover:bg-black hover:text-white">Quick View</div>
@@ -164,8 +164,8 @@
                                 </div>
                             </div>
                             <div class="product-img w-full h-full aspect-[3/4]">
-                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/12-1.png" alt="img" />
-                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/12-2.png" alt="img" />
+                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/12-1.webp" alt="img" loading="lazy" decoding="async" />
+                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/12-2.webp" alt="img" loading="lazy" decoding="async" />
                             </div>
                             <div class="list-action grid grid-cols-2 gap-3 px-5 absolute w-full bottom-5 max-lg:hidden">
                                 <div class="quick-view-btn w-full text-button-uppercase py-2 text-center rounded-full duration-300 bg-white hover:bg-black hover:text-white">Quick View</div>
@@ -228,8 +228,8 @@
                                 </div>
                             </div>
                             <div class="product-img w-full h-full aspect-[3/4]">
-                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/11-1.png" alt="img" />
-                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/11-2.png" alt="img" />
+                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/11-1.webp" alt="img" loading="lazy" decoding="async" />
+                                <img class="w-full h-full object-cover duration-700" src="<?= base_url() ?>assets/images/product/fashion/11-2.webp" alt="img" loading="lazy" decoding="async" />
                             </div>
                             <div class="list-action grid grid-cols-2 gap-3 px-5 absolute w-full bottom-5 max-lg:hidden">
                                 <div class="quick-view-btn w-full text-button-uppercase py-2 text-center rounded-full duration-300 bg-white hover:bg-black hover:text-white">Quick View</div>
@@ -740,10 +740,13 @@
     // gated on this flag rather than a server session check on every action.
     window.isUserLoggedIn = <?= $this->session->has_userdata('login_user_id') ? 'true' : 'false' ?>;
 </script>
-<script src="<?= base_url() ?>assets/js/phosphor-icons.js"></script>
+<script src="<?= base_url() ?>assets/js/phosphor-icons.js?v=<?= @filemtime(FCPATH . 'assets/js/phosphor-icons.js') ?: time() ?>"></script>
 <script src="<?= base_url() ?>assets/js/swiper-bundle.min.js"></script>
 <script src="<?= base_url() ?>assets/js/main.js?v=<?= @filemtime(FCPATH . 'assets/js/main.js') ?: time() ?>"></script>
+<?php // Razorpay's SDK is only used by checkout.js - don't make every other page download it.
+if (isset($customScripts['assets/js/pages/checkout.js'])): ?>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<?php endif; ?>
 
 <?php if (isset($customScripts) && count($customScripts) > 0):
     foreach ($customScripts as $script => $type):

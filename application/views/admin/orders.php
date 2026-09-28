@@ -839,7 +839,7 @@ $status = $this->input->get('status');
                     if (source.type === 'vendor') {
                         hint.text('Auto-filled from ' + source.vendor_name + "'s vendor profile.");
                         if (!source.nickname_registered) {
-                            warning.text('This order was fulfilled by ' + source.vendor_name + ', but no Shiprocket pickup nickname is set for them yet (Vendors > Edit Vendor) - falling back to the house pickup location below. Update it there once you\'ve registered their address in Shiprocket.').show();
+                            warning.text('This order was fulfilled by ' + source.vendor_name + ', but no Shiprocket pickup nickname is set for them yet (Partners > Edit Partner) - falling back to the house pickup location below. Update it there once you\'ve registered their address in Shiprocket.').show();
                         } else {
                             warning.hide();
                         }

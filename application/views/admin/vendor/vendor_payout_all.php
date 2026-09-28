@@ -17,7 +17,7 @@
                         <div class="card-body">
                             <h5>Unpaid Balances</h5>
                             <table class="table table-bordered">
-                                <thead><tr><th>Vendor</th><th>Unpaid Lines</th><th>Unpaid Amount</th><th>Action</th></tr></thead>
+                                <thead><tr><th>Partner</th><th>Unpaid Lines</th><th>Unpaid Amount</th><th>Action</th></tr></thead>
                                 <tbody>
                                     <?php if (empty($unpaid_summary)) : ?>
                                         <tr><td colspan="4" class="text-center">Nothing outstanding.</td></tr>
@@ -43,7 +43,7 @@
                         <div class="card-body">
                             <h5>Recent Payouts</h5>
                             <table class="table table-bordered">
-                                <thead><tr><th>Vendor</th><th>Period</th><th>Amount</th><th>Status</th><th>Reference</th><th>Action</th></tr></thead>
+                                <thead><tr><th>Partner</th><th>Period</th><th>Amount</th><th>Status</th><th>Reference</th><th>Action</th></tr></thead>
                                 <tbody>
                                     <?php if (empty($recent_payouts)) : ?>
                                         <tr><td colspan="6" class="text-center">No payouts created yet.</td></tr>
@@ -78,7 +78,7 @@
 <script>
     $(document).on('click', '.createPayoutBtn', function() {
         var vendorId = $(this).data('vendor');
-        if (!confirm('Create a payout batch for every unpaid line for this vendor?')) return;
+        if (!confirm('Create a payout batch for every unpaid line for this partner?')) return;
         $.post('<?= base_url('vendorPayoutCreate') ?>', {
             vendor_id: vendorId
         }, function(res) {
