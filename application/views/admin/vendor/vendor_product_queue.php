@@ -17,7 +17,7 @@
                             <table id="ajax_table" class="table table-bordered dt-responsive nowrap w-100">
                                 <thead>
                                     <tr>
-                                        <th>Vendor</th>
+                                        <th>Partner</th>
                                         <th>Product</th>
                                         <th>Supply Price</th>
                                         <th>Quantity</th>

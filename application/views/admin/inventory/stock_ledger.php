@@ -47,7 +47,7 @@
                                                 if ($entry['changed_by_type'] == ACTOR_TYPE_ADMIN) {
                                                     echo 'Admin #' . $entry['changed_by_id'];
                                                 } elseif ($entry['changed_by_type'] == ACTOR_TYPE_VENDOR) {
-                                                    echo 'Vendor #' . $entry['changed_by_id'];
+                                                    echo 'Partner #' . $entry['changed_by_id'];
                                                 } else {
                                                     echo 'System (order flow)';
                                                 }

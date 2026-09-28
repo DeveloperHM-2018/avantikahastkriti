@@ -50,9 +50,9 @@
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-body">
-                            <h5>Restocks by Vendor</h5>
+                            <h5>Restocks by Partner</h5>
                             <table class="table table-bordered">
-                                <thead><tr><th>Vendor</th><th>Qty</th><th>Cost</th></tr></thead>
+                                <thead><tr><th>Partner</th><th>Qty</th><th>Cost</th></tr></thead>
                                 <tbody>
                                     <?php if (empty($by_vendor)) : ?>
                                         <tr><td colspan="3" class="text-center">No restocks in this range.</td></tr>
@@ -72,10 +72,10 @@
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-body">
-                            <h5>Initial Product Listings from Vendors</h5>
-                            <p class="text-muted small">Stock that entered the catalog via a newly-approved vendor product submission, not a restock of an existing product.</p>
+                            <h5>Initial Product Listings from Partners</h5>
+                            <p class="text-muted small">Stock that entered the catalog via a newly-approved partner product submission, not a restock of an existing product.</p>
                             <table class="table table-bordered">
-                                <thead><tr><th>Vendor</th><th>Qty</th><th>Entries</th></tr></thead>
+                                <thead><tr><th>Partner</th><th>Qty</th><th>Entries</th></tr></thead>
                                 <tbody>
                                     <?php if (empty($ledger_vendor_supply)) : ?>
                                         <tr><td colspan="3" class="text-center">None in this range.</td></tr>

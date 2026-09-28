@@ -61,6 +61,20 @@ class Vendor extends CI_Controller
 					foreach (['gst_certificate' => 'gst_certificate', 'pan_card' => 'pan_card', 'bank_proof' => 'bank_proof'] as $field => $docType) {
 						$this->CommonModel->handleVendorDocumentUpload($vendorId, $field, $docType);
 					}
+
+					$smtp = $this->CommonModel->getSingleRowById('mail_smtp_setting', ['id' => 1]);
+					sendTemplatedMail('vendor_registered_vendor', $this->input->post('email_id'), [
+						'contact_name' => $this->input->post('contact_name'),
+						'business_name' => $this->input->post('business_name'),
+						'app_name' => APP_NAME,
+					]);
+					sendTemplatedMail('vendor_registered_admin', @$smtp['notify_email'], [
+						'business_name' => $this->input->post('business_name'),
+						'contact_name' => $this->input->post('contact_name'),
+						'email' => $this->input->post('email_id'),
+						'app_name' => APP_NAME,
+					]);
+
 					flashData('errors', 'Registration submitted. An admin will review your application shortly.');
 					redirect('vendor/login');
 					return;
@@ -131,6 +145,101 @@ class Vendor extends CI_Controller
 		$this->load->view('vendor/login');
 	}
 
+	// Forgot password: emails a single-use reset link (valid
+	// RESET_TOKEN_MINUTES). Always answers with the same message whether or
+	// not the email exists, so this can't be used to discover which emails
+	// are registered partners. Only sha256(token) is stored - see migration 007.
+	const RESET_TOKEN_MINUTES = 30;
+
+	public function forgotPassword()
+	{
+		if (sessionId('vendor_id') != '') {
+			redirect('vendor/dashboard');
+		}
+
+		if (count($_POST) > 0) {
+			$this->form_validation->set_rules('email_id', 'Email', 'trim|required|valid_email');
+			$this->form_validation->set_error_delimiters('<div class="text-danger">', '</div>');
+
+			if ($this->form_validation->run()) {
+				$vendor = $this->CommonModel->getSingleRowById('vendor', ['email_id' => $this->input->post('email_id')]);
+
+				// Rejected accounts can't log in anyway, so don't mail them a link.
+				// A link issued within the last minute is left alone to stop the
+				// form being used to spam a partner's inbox.
+				$recentlyIssued = $vendor && $vendor['reset_token_expires']
+					&& strtotime($vendor['reset_token_expires']) - self::RESET_TOKEN_MINUTES * 60 > time() - 60;
+
+				if ($vendor && $vendor['status'] != 2 && !$recentlyIssued) {
+					$token = bin2hex(random_bytes(32));
+					$this->CommonModel->updateRowById('vendor', 'vendor_id', $vendor['vendor_id'], [
+						'reset_token_hash' => hash('sha256', $token),
+						'reset_token_expires' => date('Y-m-d H:i:s', strtotime('+' . self::RESET_TOKEN_MINUTES . ' minutes')),
+					]);
+					sendTemplatedMail('vendor_password_reset', $vendor['email_id'], [
+						'contact_name' => $vendor['contact_name'],
+						'reset_link' => base_url('vendor/reset-password?token=' . $token),
+						'expiry_minutes' => self::RESET_TOKEN_MINUTES,
+						'app_name' => APP_NAME,
+					]);
+					$this->CommonModel->logAdminActivity(ACTOR_TYPE_VENDOR, $vendor['vendor_id'], 'vendor_password_reset_request', 'vendor', $vendor['vendor_id']);
+				}
+
+				flashData('errors', 'If an account exists for that email, a password reset link has been sent. Please check your inbox (and spam folder).');
+				redirect('vendor/forgot-password');
+				return;
+			} else {
+				flashData('errors', validation_errors());
+			}
+		}
+
+		$this->load->view('vendor/forgot_password');
+	}
+
+	public function resetPassword()
+	{
+		if (sessionId('vendor_id') != '') {
+			redirect('vendor/dashboard');
+		}
+
+		$token = (string) ($this->input->post('token') ?: $this->input->get('token'));
+		$vendor = null;
+		if (preg_match('/^[a-f0-9]{64}$/', $token)) {
+			$vendor = $this->CommonModel->getSingleRowById('vendor', ['reset_token_hash' => hash('sha256', $token)]);
+		}
+		if (!$vendor || strtotime($vendor['reset_token_expires']) < time()) {
+			flashData('errors', 'This password reset link is invalid or has expired. Please request a new one.');
+			redirect('vendor/forgot-password');
+			return;
+		}
+
+		if (count($_POST) > 0) {
+			$this->form_validation->set_rules('new_password', 'New Password', 'required|min_length[6]');
+			$this->form_validation->set_rules('confirm_password', 'Confirm Password', 'required|matches[new_password]');
+			$this->form_validation->set_error_delimiters('<div class="text-danger">', '</div>');
+
+			if ($this->form_validation->run()) {
+				// Clearing the token makes the link single-use; clearing the
+				// lockout lets a partner who locked themselves out log straight in.
+				$this->CommonModel->updateRowById('vendor', 'vendor_id', $vendor['vendor_id'], [
+					'password' => password_hash($this->input->post('new_password'), PASSWORD_DEFAULT),
+					'reset_token_hash' => null,
+					'reset_token_expires' => null,
+					'failed_login_count' => 0,
+					'locked_until' => null,
+				]);
+				$this->CommonModel->logAdminActivity(ACTOR_TYPE_VENDOR, $vendor['vendor_id'], 'vendor_password_reset', 'vendor', $vendor['vendor_id']);
+				flashData('errors', 'Your password has been reset. Please log in with your new password.');
+				redirect('vendor/login');
+				return;
+			} else {
+				flashData('errors', validation_errors());
+			}
+		}
+
+		$this->load->view('vendor/reset_password', ['token' => $token]);
+	}
+
 	public function logout()
 	{
 		$vendorId = sessionId('vendor_id');
@@ -147,8 +256,8 @@ class Vendor extends CI_Controller
 		$this->requireLogin();
 		$vendorId = sessionId('vendor_id');
 
-		$data['title'] = 'Vendor Dashboard';
 		$data['vendor'] = $this->CommonModel->getSingleRowById('vendor', ['vendor_id' => $vendorId]);
+		$data['title'] = ucwords($data['vendor']['business_name']);
 		$data['total_products'] = $this->CommonModel->getNumRows('vendor_product', ['vendor_id' => $vendorId]);
 		$data['pending_products'] = $this->CommonModel->getNumRows('vendor_product', ['vendor_id' => $vendorId, 'status' => 0]);
 		$data['live_products'] = $this->CommonModel->getNumRows('vendor_product', ['vendor_id' => $vendorId, 'status' => 1]);
@@ -242,11 +351,11 @@ class Vendor extends CI_Controller
 	// AdminVendor::vendorProductReview().
 	//
 	// ?id=<encrypted vendor_product_id> switches this into edit mode for an
-	// existing submission. Pricing (vendor_supply_price, proposed_market_price)
-	// is locked once submitted - the form renders those fields disabled and,
+	// existing submission. Pricing (vendor_supply_price, shown to partners as
+	// "Sale Price"; they no longer enter an MRP - admin sets it on review) is locked once submitted - the form renders those fields disabled and,
 	// regardless of what a tampered request sends, the save below never
 	// writes to them in edit mode; only a brand-new submission sets prices.
-	// The actual sale price is never vendor-set at all - see
+	// The live catalog sale price/MRP are never vendor-set at all - see
 	// AdminVendor::vendorProductReview(). Editing anything else on an already-approved
 	// product doesn't touch the live catalog - it resets this submission to
 	// Pending so admin re-reviews the change before it goes live.
@@ -278,8 +387,7 @@ class Vendor extends CI_Controller
 				// Sale price is never collected here at all - that's entirely
 				// admin's call, calculated from commission on the review screen
 				// (see AdminVendor::vendorProductReview()).
-				$this->form_validation->set_rules('proposed_market_price', 'Market Price', 'trim|required|numeric|greater_than[0]');
-				$this->form_validation->set_rules('vendor_supply_price', 'Your Supply Price', 'trim|required|numeric|greater_than[0]');
+				$this->form_validation->set_rules('vendor_supply_price', 'Sale Price', 'trim|required|numeric|greater_than[0]');
 			}
 			$this->form_validation->set_error_delimiters('<div class="text-danger">', '</div>');
 
@@ -304,8 +412,8 @@ class Vendor extends CI_Controller
 
 				if ($existing) {
 					// Pricing keys are deliberately absent from $post here, so
-					// updateRowById() leaves vendor_supply_price/
-					// proposed_market_price exactly as they were - no path in
+					// updateRowById() leaves vendor_supply_price
+					// exactly as it was - no path in
 					// edit mode ever writes to them.
 					$post['status'] = 0;
 					$this->CommonModel->updateRowById('vendor_product', 'vendor_product_id', $vendorProductId, $post);
@@ -313,7 +421,6 @@ class Vendor extends CI_Controller
 					$message = 'Product updated and resubmitted for admin review.';
 				} else {
 					$post['vendor_supply_price'] = $this->input->post('vendor_supply_price');
-					$post['proposed_market_price'] = $this->input->post('proposed_market_price');
 					$post['status'] = 0;
 					$vendorProductId = $this->CommonModel->insertRowReturnId('vendor_product', $post);
 					$this->CommonModel->logAdminActivity(ACTOR_TYPE_VENDOR, $vendorId, 'vendor_product_submit', 'vendor_product', $vendorProductId, null, ['product_name' => $post['product_name']]);

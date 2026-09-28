@@ -92,7 +92,7 @@
                         </div>
                         <div class="col-md-4">
                             <div class="card"><div class="card-body">
-                                <p class="text-muted mb-1">Payable to Vendor</p>
+                                <p class="text-muted mb-1">Payable to Partner</p>
                                 <h4>₹<?= number_format($total_payable, 2) ?></h4>
                             </div></div>
                         </div>

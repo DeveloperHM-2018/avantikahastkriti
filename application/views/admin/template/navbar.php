@@ -67,12 +67,12 @@ $page = ACTIVE_PAGE;
 					<li class=" <?= in_array($page, ['vendorAll', 'vendorAdd', 'vendorDetails', 'vendorProductQueue', 'vendorProductReview', 'vendorPayoutAll']) ? 'mm-active' : '' ?>">
 						<a href="javascript: void(0);" class="has-arrow waves-effect">
 							<i class="bx bx-store"></i>
-							<span key="t-file-manager">Vendors</span>
+							<span key="t-file-manager">Partners</span>
 						</a>
 						<ul class="sub-menu" aria-expanded="false">
-							<li><a href="<?= base_url('vendorAll') ?>" class="<?= $page == "vendorAll" || $page == "vendorDetails" ? 'active' : '' ?>">All Vendors</a></li>
+							<li><a href="<?= base_url('vendorAll') ?>" class="<?= $page == "vendorAll" || $page == "vendorDetails" ? 'active' : '' ?>">All Partners</a></li>
 							<?php if (@PREV['vendor_approve'] == 1 || USER_TYPE == '1') { ?>
-								<li><a href="<?= base_url('vendorAdd') ?>" class="<?= $page == "vendorAdd" ? 'active' : '' ?>">Add Vendor</a></li>
+								<li><a href="<?= base_url('vendorAdd') ?>" class="<?= $page == "vendorAdd" ? 'active' : '' ?>">Add Partner</a></li>
 							<?php } ?>
 							<li><a href="<?= base_url('vendorProductQueue') ?>" class="<?= $page == "vendorProductQueue" || $page == "vendorProductReview" ? 'active' : '' ?>">Product Approvals</a></li>
 							<li><a href="<?= base_url('vendorPayoutAll') ?>" class="<?= $page == "vendorPayoutAll" ? 'active' : '' ?>">Payouts</a></li>
@@ -187,7 +187,7 @@ $page = ACTIVE_PAGE;
 							<li><a href="<?= base_url('salesReport') ?>" class="<?= $page == "salesReport" ? 'active' : '' ?>">Sales</a></li>
 							<li><a href="<?= base_url('inventoryReport') ?>" class="<?= $page == "inventoryReport" ? 'active' : '' ?>">Inventory</a></li>
 							<li><a href="<?= base_url('purchaseReport') ?>" class="<?= $page == "purchaseReport" ? 'active' : '' ?>">Purchase</a></li>
-							<li><a href="<?= base_url('vendorReport') ?>" class="<?= $page == "vendorReport" ? 'active' : '' ?>">Vendor</a></li>
+							<li><a href="<?= base_url('vendorReport') ?>" class="<?= $page == "vendorReport" ? 'active' : '' ?>">Partner</a></li>
 						</ul>
 					</li>
 				<?php } ?>

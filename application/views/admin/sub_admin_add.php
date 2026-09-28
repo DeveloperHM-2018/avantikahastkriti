@@ -159,12 +159,12 @@
                                                     </td>
                                                 </tr>
                                                 <tr>
-                                                    <td>Vendors</td>
+                                                    <td>Partners</td>
                                                     <td><input type="checkbox" class="form-check-input" name="vendor_view" value="1" <?= isset($privileges->vendor_view) ? ($privileges->vendor_view == 1 ? 'checked' : '') : '' ?>></td>
                                                     <td></td>
                                                     <td></td>
                                                     <td>
-                                                        <span>Approve Vendor <input type="checkbox" class="form-check-input" name="vendor_approve" value="1" <?= isset($privileges->vendor_approve) ? ($privileges->vendor_approve == 1 ? 'checked' : '') : '' ?>></span>
+                                                        <span>Approve Partner <input type="checkbox" class="form-check-input" name="vendor_approve" value="1" <?= isset($privileges->vendor_approve) ? ($privileges->vendor_approve == 1 ? 'checked' : '') : '' ?>></span>
                                                         <span class="ms-2">Approve Products <input type="checkbox" class="form-check-input" name="vendor_product_approve" value="1" <?= isset($privileges->vendor_product_approve) ? ($privileges->vendor_product_approve == 1 ? 'checked' : '') : '' ?>></span>
                                                         <span class="ms-2">Process Payouts <input type="checkbox" class="form-check-input" name="vendor_payout_process" value="1" <?= isset($privileges->vendor_payout_process) ? ($privileges->vendor_payout_process == 1 ? 'checked' : '') : '' ?>></span>
                                                     </td>

@@ -9,6 +9,26 @@ const getBaseUrl = () =>
 
 const BASE_URL = getBaseUrl();
 
+// === Shared product catalog ===
+// Test/products returns the whole catalog (~1MB JSON), and several blocks on a
+// page each need it. Request it once per page and hand every caller its own
+// freshly parsed copy, so a caller that sorts/mutates the array can't affect
+// another one.
+let allProductsTextPromise = null;
+function getAllProducts() {
+  if (!allProductsTextPromise) {
+    allProductsTextPromise = fetch(`${BASE_URL}Test/products`).then((res) => {
+      if (!res.ok) throw new Error(`Test/products failed: ${res.status}`);
+      return res.text();
+    });
+    // Let a later caller retry instead of reusing a failed request forever.
+    allProductsTextPromise.catch(() => {
+      allProductsTextPromise = null;
+    });
+  }
+  return allProductsTextPromise.then((text) => JSON.parse(text));
+}
+
 function redirect(url) {
   window.location.href = `${BASE_URL}${url}`;
 }
@@ -349,8 +369,7 @@ if (listSearchResults) {
 
   const listProductResult = document.querySelector(".list-product-result");
   if (queryValue) {
-    fetch(`${BASE_URL}Test/products`)
-      .then((response) => response.json())
+    getAllProducts()
       .then((products) => {
         const filterPrd = products.filter(
           (product) =>
@@ -495,8 +514,7 @@ const openModalSimilarProduct = async (category) => {
   modalSimilarProductMain.classList.add("open");
 
   try {
-    const response = await fetch(`${BASE_URL}Test/products`);
-    const products = await response.json();
+    const products = await getAllProducts();
     const similarProducts = products.filter(p => p.category === category);
 
     listItemSimilar.innerHTML = "";
@@ -1260,8 +1278,7 @@ if (document.querySelector(".swiper-list-three-product")) {
 const lookbookUnderwear = document.querySelector(".lookbook-underwear");
 
 if (lookbookUnderwear) {
-  fetch(`${BASE_URL}Test/products`)
-    .then((response) => response.json())
+  getAllProducts()
     .then((products) => {
       const itemDot = lookbookUnderwear.querySelector(".list-img .item .dots");
       const itemDots = lookbookUnderwear.querySelectorAll(
@@ -2439,8 +2456,7 @@ const handleActiveColorChange = () => {
 const filterProductImg = document.querySelector(".filter-product-img");
 
 if (filterProductImg) {
-  fetch(`${BASE_URL}Test/products`)
-    .then((response) => response.json())
+  getAllProducts()
     .then((data) => {
       const prdId = filterProductImg
         .querySelector(".product-infor")
@@ -2540,8 +2556,7 @@ function removeSkeliton() {
     });
   }
 }
-fetch(`${BASE_URL}Test/products`)
-  .then((response) => response.json())
+getAllProducts()
   .then((products) => {
     if (listFourProduct) {
       listFourProduct.forEach((list) => {
@@ -3041,8 +3056,7 @@ const createProductItemMarketplace = (product) => {
 
 // fetch product in marketplace
 if (document.querySelector(".tab-features-block.style-marketplace")) {
-  fetch(`${BASE_URL}Test/products`)
-    .then((response) => response.json())
+  getAllProducts()
     .then((products) => {
       // Display the first 4 products
       const listProduct = document.querySelector(
@@ -4188,14 +4202,12 @@ let listProductCart = document.querySelector(".cart-block .list-product-main");
 
 // Cart contents are localStorage snapshots taken at add-to-cart time, so a
 // product's stock flag can go stale (in-stock when added, flagged out of
-// stock later by staff). Fetched once and cached - product listing/detail
-// pages already hit Test/products separately, this just needs a fresh-enough
-// read of the same feed for the cart/checkout pages specifically.
+// stock later by staff). Built from the page's shared catalog request
+// (getAllProducts), which is fetched fresh on every page load.
 let outOfStockMapPromise = null;
 function getOutOfStockMap() {
   if (!outOfStockMapPromise) {
-    outOfStockMapPromise = fetch(`${BASE_URL}Test/products`)
-      .then((res) => res.json())
+    outOfStockMapPromise = getAllProducts()
       .then((data) => {
         const map = {};
         data.forEach((p) => {

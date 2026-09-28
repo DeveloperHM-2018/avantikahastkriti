@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>Vendor Login</title>
+    <title>Partner Login</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <?php $this->load->view('admin/template/header_link'); ?>
 </head>
@@ -18,8 +18,8 @@
                             <div class="row">
                                 <div class="col-7">
                                     <div class="text-primary p-4">
-                                        <h5 class="text-primary">Vendor Login</h5>
-                                        <p>Sign in to your vendor account</p>
+                                        <h5 class="text-primary">Partner Login</h5>
+                                        <p>Sign in to your partner account</p>
                                         <h4 class="text-primary"><?= APP_NAME ?></h4>
                                     </div>
                                 </div>
@@ -42,12 +42,15 @@
                                         <label class="form-label">Password</label>
                                         <input type="password" class="form-control" required name="password">
                                     </div>
+                                    <div class="text-end">
+                                        <a href="<?= base_url('vendor/forgot-password') ?>" class="text-muted small">Forgot password?</a>
+                                    </div>
                                     <div class="mt-4 d-grid">
                                         <button class="btn btn-primary waves-effect waves-light" type="submit">Log In</button>
                                     </div>
                                 </form>
                                 <div class="mt-3 text-center">
-                                    <a href="<?= base_url('vendor/register') ?>">New vendor? Register here</a>
+                                    <a href="<?= base_url('vendor/register') ?>">New partner? Register here</a>
                                 </div>
                             </div>
                         </div>

@@ -564,6 +564,7 @@ class CommonModel extends CI_Model
 		$this->db->trans_start();
 		$anyPinned = false;
 		$failedItem = null;
+		$vendorIds = [];
 		foreach ($items as $item) {
 			$result = $this->applyStockDecrement(
 				$item['product_id'],
@@ -591,7 +592,10 @@ class CommonModel extends CI_Model
 				// A sale that actually took stock from inventory (not pinned) -
 				// if that stock traces to a vendor, snapshot the commission split
 				// now so a later commission-rate change never rewrites history.
-				$this->attributeVendorSale($item);
+				$vendorId = $this->attributeVendorSale($item);
+				if ($vendorId) {
+					$vendorIds[$vendorId] = true;
+				}
 			}
 		}
 
@@ -608,7 +612,13 @@ class CommonModel extends CI_Model
 		}
 
 		$this->db->trans_complete();
-		return ['success' => $this->db->trans_status() !== false, 'pinned' => $anyPinned];
+		$success = $this->db->trans_status() !== false;
+
+		if ($success && $vendorIds) {
+			$this->notifyVendorsOrderPlaced($productBookId, array_keys($vendorIds));
+		}
+
+		return ['success' => $success, 'pinned' => $anyPinned];
 	}
 
 	// Row-locks the product/variant, decrements if enough stock is available,
@@ -720,7 +730,7 @@ class CommonModel extends CI_Model
 	{
 		$product = $this->getSingleRowById('product', ['product_id' => $item['product_id']]);
 		if (!$product || empty($product['default_vendor_id'])) {
-			return;
+			return null;
 		}
 
 		$vendorProduct = $this->getSingleRowById('vendor_product', [
@@ -729,7 +739,7 @@ class CommonModel extends CI_Model
 			'status' => 1, // approved
 		]);
 		if (!$vendorProduct) {
-			return;
+			return null;
 		}
 
 		$commissionPercent = $vendorProduct['commission_percent'] !== null ? (float) $vendorProduct['commission_percent'] : 0;
@@ -747,6 +757,31 @@ class CommonModel extends CI_Model
 			'vendor_payable_amount' => round($lineTotal - $commissionAmount, 2),
 			'payout_status' => 0,
 		]);
+
+		return $product['default_vendor_id'];
+	}
+
+	// Emails every vendor whose stock was actually attributed on this order
+	// (see attributeVendorSale()) that they have a new sale. Called once per
+	// decrementOrderStock() run rather than per line item, so a vendor with
+	// several products in the same order only gets a single email.
+	private function notifyVendorsOrderPlaced($productBookId, array $vendorIds)
+	{
+		$order = $this->getSingleRowById('book_product', ['product_book_id' => $productBookId]);
+		if (!$order) {
+			return;
+		}
+		foreach ($vendorIds as $vendorId) {
+			$vendor = $this->getSingleRowById('vendor', ['vendor_id' => $vendorId]);
+			if (!$vendor || empty($vendor['email_id'])) {
+				continue;
+			}
+			sendTemplatedMail('order_placed_vendor', $vendor['email_id'], [
+				'vendor_name' => $vendor['contact_name'],
+				'order_id' => $order['order_id'],
+				'app_name' => APP_NAME,
+			]);
+		}
 	}
 
 	// For the one case where a product row is INSERTed with its opening
