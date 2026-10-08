@@ -1067,6 +1067,7 @@ class AdminHome extends CI_Controller
 		$order = $this->CommonModel->getSingleRowById('book_product', ['product_book_id' => $product_book_id]);
 		if ($order) {
 			sendTemplatedMail('order_status_updated_user', @$order['email'], ['name' => $order['name'], 'order_id' => $order['order_id'], 'status' => $status, 'app_name' => APP_NAME]);
+			sendTemplatedWhatsapp('order_status_updated_user', $order['contact_no'], ['name' => $order['name'], 'order_id' => $order['order_id'], 'status' => $status]);
 		}
 	}
 
@@ -1256,6 +1257,8 @@ class AdminHome extends CI_Controller
 		$smtp = $this->CommonModel->getSingleRowById('mail_smtp_setting', ['id' => 1]);
 		sendTemplatedMail('order_placed_user', $custEmail, ['name' => $custName, 'order_id' => $orderId, 'final_amount' => $finalAmount, 'app_name' => APP_NAME]);
 		sendTemplatedMail('order_placed_admin', @$smtp['notify_email'], ['name' => $custName, 'order_id' => $orderId, 'final_amount' => $finalAmount, 'app_name' => APP_NAME]);
+		sendTemplatedWhatsapp('order_placed_user', $custContact, ['name' => $custName, 'order_id' => $orderId, 'final_amount' => $finalAmount]);
+		sendTemplatedWhatsapp('order_placed_admin', WHATSAPP_ADMIN_NUMBER, ['name' => $custName, 'order_id' => $orderId, 'final_amount' => $finalAmount]);
 
 		flashData('errors', 'Order created successfully: ' . $orderId);
 		redirect('allOrders');

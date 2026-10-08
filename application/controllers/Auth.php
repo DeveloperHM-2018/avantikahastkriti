@@ -45,6 +45,8 @@ class Auth extends CI_Controller
             $smtp = $this->CommonModel->getSingleRowById('mail_smtp_setting', ['id' => 1]);
             sendTemplatedMail('user_registered_user', $formData['email_id'], ['name' => $formData['name'], 'app_name' => APP_NAME]);
             sendTemplatedMail('user_registered_admin', @$smtp['notify_email'], ['name' => $formData['name'], 'email' => $formData['email_id'], 'app_name' => APP_NAME]);
+            sendTemplatedWhatsapp('user_registered_user', @$formData['contact_no'], ['name' => $formData['name']]);
+            sendTemplatedWhatsapp('user_registered_admin', WHATSAPP_ADMIN_NUMBER, ['name' => $formData['name'], 'email' => $formData['email_id']]);
 
             echo json_encode(['success' => true, 'message' => 'Registered Successfully']);
         } else {
@@ -236,6 +238,7 @@ class Auth extends CI_Controller
             }
 
             $sent = sendTemplatedMail('forgot_password_otp', $email, ['name' => $user['name'], 'otp' => $generatedOtp, 'app_name' => APP_NAME]);
+            sendTemplatedWhatsapp('forgot_password_otp', $user['contact_no'], ['otp' => $generatedOtp]);
 
             if (!$sent) {
                 echo json_encode(['success' => false, 'message' => 'Unable to send OTP email. Please try again later.']);

@@ -296,29 +296,10 @@ function flashData($var, $message)
 	return $ci->session->set_flashdata($var, $message);
 }
 
-function sendOTP($contact_no, $message)
+function sendOTP($contact_no, $otp)
 {
-	$url = 'https://www.wpsenders.in/api/sendTextMessage';
-
-	$dataArray = [
-		'api_key' => '',
-		'message' => $message,
-		'number' => $contact_no,
-	];
-
-	$ch = curl_init($url);
-	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
-	curl_setopt($ch, CURLOPT_FOLLOWLOCATION, TRUE);
-	curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
-	curl_setopt($ch, CURLOPT_POST, 1);
-	curl_setopt($ch, CURLOPT_POSTFIELDS, $dataArray);
-	curl_setopt($ch, CURLOPT_URL, $url);
-	curl_setopt($ch, CURLOPT_TIMEOUT, 1);
-	$data = curl_exec($ch);
-	return $data;
+	return sendTemplatedWhatsapp('login_otp', $contact_no, ['otp' => $otp]);
 }
-
-
 
 function getUserId($token)
 {
@@ -588,7 +569,82 @@ function curlResponse($url, $dataArray)
 	return json_decode($response, true);
 }
 
-function sendMessageToWhatsapp($message, $contact_no) {}
+// WhatsApp counterpart of sendTemplatedMail(): same event keys, same
+// placeholders. Which approved template an event uses (and the order its
+// variables go in) lives in config/whatsapp.php. Never throws - a failed or
+// skipped WhatsApp message must not break the order/return flow calling it.
+function sendTemplatedWhatsapp($eventKey, $contactNo, $placeholders = [])
+{
+	$ci = &get_instance();
+	$ci->config->load('whatsapp', false, true);
+	$templates = (array) $ci->config->item('whatsapp_templates');
+
+	if (WHATSAPP_PHONE_NUMBER_ID === '' || WHATSAPP_API_KEY === '' || empty($templates[$eventKey])) {
+		return false;
+	}
+	$to = formatWhatsappNumber($contactNo);
+	if ($to === false) {
+		return false;
+	}
+	$template = $templates[$eventKey];
+
+	$parameters = [];
+	foreach ($template['params'] as $key) {
+		// WhatsApp rejects a template variable that is empty or contains
+		// newlines, tabs or runs of spaces.
+		$value = trim(preg_replace('/\s+/', ' ', (string) (isset($placeholders[$key]) ? $placeholders[$key] : '')));
+		$parameters[] = ['type' => 'text', 'text' => $value !== '' ? $value : '-'];
+	}
+	$components = [];
+	if ($parameters) {
+		$components[] = ['type' => 'body', 'parameters' => $parameters];
+	}
+	if (!empty($template['otp_button'])) {
+		$components[] = ['type' => 'button', 'sub_type' => 'url', 'index' => '0', 'parameters' => [$parameters[0]]];
+	}
+
+	$payload = [
+		'to' => $to,
+		'type' => 'template',
+		'template' => [
+			'name' => $template['name'],
+			'language' => ['code' => $ci->config->item('whatsapp_language')],
+			'components' => $components,
+		],
+	];
+
+	$ch = curl_init(WHATSAPP_API_URL . '/v1/' . WHATSAPP_PHONE_NUMBER_ID . '/messages');
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+	curl_setopt($ch, CURLOPT_POST, 1);
+	curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+	curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . WHATSAPP_API_KEY, 'Content-Type: application/json']);
+	curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+	curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+	$response = curl_exec($ch);
+	$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+	$curlError = curl_error($ch);
+	curl_close($ch);
+
+	if ($httpCode >= 200 && $httpCode < 300) {
+		return true;
+	}
+	log_message('error', "sendTemplatedWhatsapp: send failed for event '$eventKey' (template '{$template['name']}', HTTP $httpCode) - " . ($curlError ?: $response));
+	return false;
+}
+
+// The API needs "+<country code><number>"; numbers are stored here as plain
+// 10-digit Indian mobiles, so anything without a country code is treated as +91.
+function formatWhatsappNumber($contactNo)
+{
+	$digits = ltrim(preg_replace('/\D+/', '', (string) $contactNo), '0');
+	if (strlen($digits) == 10) {
+		$digits = '91' . $digits;
+	}
+	if (strlen($digits) < 11 || strlen($digits) > 15) {
+		return false;
+	}
+	return '+' . $digits;
+}
 
 function multi_array_in_search($column, $id, $array)
 {

@@ -878,7 +878,7 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
                     // Sync to Shiprocket (COD) - Removed for manual sync
                     // $this->sync_to_shiprocket($checkoutId); // Removed as per instruction
 
-                    $this->CommonModel->notifyOrderPlaced($formData['name'], $formData['email'], $orderId, $totalPrice);
+                    $this->CommonModel->notifyOrderPlaced($formData['name'], $formData['email'], $orderId, $totalPrice, $formData['contact_no']);
 
                     echo json_encode(['success' => true, 'message' => 'Order placed successfully', 'order_id' => $checkoutId, 'o_id' => $orderId]);
                 }
@@ -1767,8 +1767,7 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
     {
         $contact_no = 6265965711;
         $otp = 1234;
-        $message = "Hi, Your OTP for verify your mobile number is 1245 From Aloo Tamatar Pyaz. Valid for 30 minutes. Please do not share this OTP.\nRegards,\n\nGNOSISACCRUE Team";
-        $send = sendOTP($contact_no, $message);
+        $send = sendOTP($contact_no, $otp);
         print_r($send);
         if ($send) {
             echo "OTP sent successfully";
@@ -1933,7 +1932,7 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
         // Item + parent order, scoped to the logged-in user so nobody can
         // request a return against someone else's order by guessing an id.
         $row = $this->CommonModel->getRowWithMultiJoin(
-            'bi.*, bp.product_book_id, bp.order_id, bp.booking_status, bp.delivery_date, bp.name AS customer_name, bp.email AS customer_email',
+            'bi.*, bp.product_book_id, bp.order_id, bp.booking_status, bp.delivery_date, bp.name AS customer_name, bp.email AS customer_email, bp.contact_no AS customer_contact',
             'book_item bi',
             "bi.book_item_id = '$bookItemId' AND bp.user_id = '$userId'",
             [['book_product bp', 'bi.product_book_id = bp.product_book_id', 'INNER']],
@@ -2050,6 +2049,14 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
                 'app_name' => APP_NAME,
             ]);
         }
+        $whatsappData = [
+            'name' => $row['customer_name'],
+            'order_id' => $row['order_id'],
+            'return_code' => $returnData['return_code'],
+            'product_name' => $row['product_name'],
+        ];
+        sendTemplatedWhatsapp('return_requested_user', $row['customer_contact'], $whatsappData);
+        sendTemplatedWhatsapp('return_requested_admin', WHATSAPP_ADMIN_NUMBER, $whatsappData);
 
         echo json_encode(['success' => true, 'message' => 'Return Request Submitted Successfully.', 'return_code' => $returnData['return_code']]);
         exit();

@@ -160,3 +160,12 @@ define('RAZORPAY_WEBHOOK_SECRET', getenv('RAZORPAY_WEBHOOK_SECRET') !== false ? 
 define('SHIPROCKET_EMAIL', getenv('SHIPROCKET_EMAIL') !== false ? getenv('SHIPROCKET_EMAIL') : 'sagarthakur6947@gmail.com');
 define('SHIPROCKET_PASSWORD', getenv('SHIPROCKET_PASSWORD') !== false ? getenv('SHIPROCKET_PASSWORD') : 'exnXYV19#*ET!Hvs^0jX#yufo67JFjta');
 define('SHIPROCKET_API_URL', 'https://apiv2.shiprocket.in/v1/external/');
+
+// Hello WhatsApp API (lakshyapocketlab.com). Templates are mapped per event in
+// config/whatsapp.php. WHATSAPP_PHONE_NUMBER_ID is the sending number's ID from
+// the panel's Accounts page - while it is empty no WhatsApp message is sent.
+define('WHATSAPP_API_URL', 'https://helloapi.lakshyapocketlab.com');
+define('WHATSAPP_API_KEY', getenv('WHATSAPP_API_KEY') !== false ? getenv('WHATSAPP_API_KEY') : 'hello_live_137f424e74de09d0c16972be3311c21668f25facfa47cb23');
+define('WHATSAPP_PHONE_NUMBER_ID', getenv('WHATSAPP_PHONE_NUMBER_ID') !== false ? getenv('WHATSAPP_PHONE_NUMBER_ID') : '');
+// Number that receives the admin alerts (new order, new return, ...). Empty = no admin alerts.
+define('WHATSAPP_ADMIN_NUMBER', getenv('WHATSAPP_ADMIN_NUMBER') !== false ? getenv('WHATSAPP_ADMIN_NUMBER') : '');

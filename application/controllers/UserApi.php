@@ -67,7 +67,6 @@ class UserApi extends REST_Controller
             // gateway isn't required to test the login flow on a dev machine.
             // There is no bypass of any kind once this runs in production.
             $otp = OTP_ENABLE ? random_int(100000, 999999) : 12345;
-            $message_content = "Hi, Your OTP for verify your mobile number is " . $otp . " From " . APP_NAME . " . Valid for 10 minutes. Please do not share this OTP.\nRegards,\n\nGNOSISACCRUE Team";
             $this->CommonModel->insertRow('temp_otp', [
                 'contact_no' => $contact_no,
                 'otp' => $otp,
@@ -78,7 +77,7 @@ class UserApi extends REST_Controller
                 return;
             }
             if (OTP_ENABLE) {
-                sendOTP($contact_no, $message_content);
+                sendOTP($contact_no, $otp);
             }
             $this->response(array('status' => 200, 'message' => 'OTP send successfully.', 'data' => null), REST_Controller::HTTP_OK);
         } else {
@@ -135,6 +134,7 @@ class UserApi extends REST_Controller
 
                     $smtp = $this->CommonModel->getSingleRowById('mail_smtp_setting', ['id' => 1]);
                     sendTemplatedMail('user_registered_admin', @$smtp['notify_email'], ['name' => $contact_no, 'email' => '-', 'app_name' => APP_NAME]);
+                    sendTemplatedWhatsapp('user_registered_admin', WHATSAPP_ADMIN_NUMBER, ['name' => $contact_no, 'email' => '-']);
 
                     $token_data = array(
                         'id' => $insertId,
@@ -860,6 +860,8 @@ class UserApi extends REST_Controller
                         $smtp = $this->CommonModel->getSingleRowById('mail_smtp_setting', ['id' => 1]);
                         sendTemplatedMail('order_placed_user', @$getUser['email_id'], ['name' => $name, 'order_id' => $orderId, 'final_amount' => $finalAmount, 'app_name' => APP_NAME]);
                         sendTemplatedMail('order_placed_admin', @$smtp['notify_email'], ['name' => $name, 'order_id' => $orderId, 'final_amount' => $finalAmount, 'app_name' => APP_NAME]);
+                        sendTemplatedWhatsapp('order_placed_user', $contact_no, ['name' => $name, 'order_id' => $orderId, 'final_amount' => $finalAmount]);
+                        sendTemplatedWhatsapp('order_placed_admin', WHATSAPP_ADMIN_NUMBER, ['name' => $name, 'order_id' => $orderId, 'final_amount' => $finalAmount]);
 
                         $this->response(array('status' => 200, 'message' => 'Order book successfully.', 'data' => array('order_id' => $orderId)));
                     } else {
@@ -1113,7 +1115,7 @@ class UserApi extends REST_Controller
         }
 
         $row = $this->CommonModel->getRowWithMultiJoin(
-            'bi.*, bp.product_book_id, bp.order_id, bp.booking_status, bp.delivery_date, bp.name AS customer_name, bp.email AS customer_email',
+            'bi.*, bp.product_book_id, bp.order_id, bp.booking_status, bp.delivery_date, bp.name AS customer_name, bp.email AS customer_email, bp.contact_no AS customer_contact',
             'book_item bi',
             "bi.book_item_id = '$bookItemId' AND bp.user_id = '$userId'",
             [['book_product bp', 'bi.product_book_id = bp.product_book_id', 'INNER']],
@@ -1228,6 +1230,14 @@ class UserApi extends REST_Controller
                 'app_name' => APP_NAME,
             ]);
         }
+        $whatsappData = [
+            'name' => $row['customer_name'],
+            'order_id' => $row['order_id'],
+            'return_code' => $returnData['return_code'],
+            'product_name' => $row['product_name'],
+        ];
+        sendTemplatedWhatsapp('return_requested_user', $row['customer_contact'], $whatsappData);
+        sendTemplatedWhatsapp('return_requested_admin', WHATSAPP_ADMIN_NUMBER, $whatsappData);
 
         $this->response(array('status' => 200, 'message' => 'Return Request Submitted Successfully.', 'data' => ['return_code' => $returnData['return_code']]));
     }
