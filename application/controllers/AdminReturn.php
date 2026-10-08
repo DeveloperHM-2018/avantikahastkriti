@@ -362,6 +362,11 @@ class AdminReturn extends CI_Controller
 				'return_code' => $returnRow['return_code'],
 				'app_name' => APP_NAME,
 			]);
+			sendTemplatedWhatsapp('return_approved_user', $order['contact_no'], [
+				'name' => $order['name'],
+				'order_id' => $order['order_id'],
+				'return_code' => $returnRow['return_code'],
+			]);
 		}
 
 		$message = 'Return request approved.';
@@ -549,6 +554,12 @@ class AdminReturn extends CI_Controller
 				'reject_reason' => $rejectReason,
 				'app_name' => APP_NAME,
 			]);
+			sendTemplatedWhatsapp('return_rejected_user', $order['contact_no'], [
+				'name' => $order['name'],
+				'order_id' => $order['order_id'],
+				'return_code' => $returnRow['return_code'],
+				'reject_reason' => $rejectReason,
+			]);
 		}
 
 		echo json_encode(['status' => true, 'message' => 'Return request rejected.']);
@@ -624,6 +635,13 @@ class AdminReturn extends CI_Controller
 					'refund_amount' => number_format($refundAmount, 2),
 					'refund_method' => $refundMethod,
 					'app_name' => APP_NAME,
+				]);
+				sendTemplatedWhatsapp('return_refund_completed_user', $order['contact_no'], [
+					'name' => $order['name'],
+					'order_id' => $order['order_id'],
+					'return_code' => $returnRow['return_code'],
+					'refund_amount' => number_format($refundAmount, 2),
+					'refund_method' => $refundMethod,
 				]);
 			}
 		} else {

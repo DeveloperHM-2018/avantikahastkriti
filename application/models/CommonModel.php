@@ -436,11 +436,13 @@ class CommonModel extends CI_Model
 		return false; // Return false if no matching row found
 	}
 
-	public function notifyOrderPlaced($name, $email, $orderId, $finalAmount)
+	public function notifyOrderPlaced($name, $email, $orderId, $finalAmount, $contactNo = '')
 	{
 		$smtp = $this->getSingleRowById('mail_smtp_setting', ['id' => 1]);
 		sendTemplatedMail('order_placed_user', $email, ['name' => $name, 'order_id' => $orderId, 'final_amount' => $finalAmount, 'app_name' => APP_NAME]);
 		sendTemplatedMail('order_placed_admin', @$smtp['notify_email'], ['name' => $name, 'order_id' => $orderId, 'final_amount' => $finalAmount, 'app_name' => APP_NAME]);
+		sendTemplatedWhatsapp('order_placed_user', $contactNo, ['name' => $name, 'order_id' => $orderId, 'final_amount' => $finalAmount]);
+		sendTemplatedWhatsapp('order_placed_admin', WHATSAPP_ADMIN_NUMBER, ['name' => $name, 'order_id' => $orderId, 'final_amount' => $finalAmount]);
 	}
 
 	// Single place every payment-confirmation path (Standard Checkout's
@@ -530,7 +532,8 @@ class CommonModel extends CI_Model
 				isset($update['name']) ? $update['name'] : $order['name'],
 				isset($update['email']) ? $update['email'] : $order['email'],
 				$order['order_id'],
-				$order['final_amount']
+				$order['final_amount'],
+				isset($update['contact_no']) ? $update['contact_no'] : $order['contact_no']
 			);
 		} else {
 			log_message('info', 'Duplicate payment confirmation ignored for order ' . $order['order_id']);
@@ -773,7 +776,14 @@ class CommonModel extends CI_Model
 		}
 		foreach ($vendorIds as $vendorId) {
 			$vendor = $this->getSingleRowById('vendor', ['vendor_id' => $vendorId]);
-			if (!$vendor || empty($vendor['email_id'])) {
+			if (!$vendor) {
+				continue;
+			}
+			sendTemplatedWhatsapp('order_placed_vendor', $vendor['contact_no'], [
+				'vendor_name' => $vendor['contact_name'],
+				'order_id' => $order['order_id'],
+			]);
+			if (empty($vendor['email_id'])) {
 				continue;
 			}
 			sendTemplatedMail('order_placed_vendor', $vendor['email_id'], [

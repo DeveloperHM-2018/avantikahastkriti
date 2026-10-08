@@ -74,6 +74,13 @@ class Vendor extends CI_Controller
 						'email' => $this->input->post('email_id'),
 						'app_name' => APP_NAME,
 					]);
+					$whatsappData = [
+						'contact_name' => $this->input->post('contact_name'),
+						'business_name' => $this->input->post('business_name'),
+						'email' => $this->input->post('email_id'),
+					];
+					sendTemplatedWhatsapp('vendor_registered_vendor', $this->input->post('contact_no'), $whatsappData);
+					sendTemplatedWhatsapp('vendor_registered_admin', WHATSAPP_ADMIN_NUMBER, $whatsappData);
 
 					flashData('errors', 'Registration submitted. An admin will review your application shortly.');
 					redirect('vendor/login');
@@ -181,6 +188,11 @@ class Vendor extends CI_Controller
 						'reset_link' => base_url('vendor/reset-password?token=' . $token),
 						'expiry_minutes' => self::RESET_TOKEN_MINUTES,
 						'app_name' => APP_NAME,
+					]);
+					sendTemplatedWhatsapp('vendor_password_reset', $vendor['contact_no'], [
+						'contact_name' => $vendor['contact_name'],
+						'reset_link' => base_url('vendor/reset-password?token=' . $token),
+						'expiry_minutes' => self::RESET_TOKEN_MINUTES,
 					]);
 					$this->CommonModel->logAdminActivity(ACTOR_TYPE_VENDOR, $vendor['vendor_id'], 'vendor_password_reset_request', 'vendor', $vendor['vendor_id']);
 				}
