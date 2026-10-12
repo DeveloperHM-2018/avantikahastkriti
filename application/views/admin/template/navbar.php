@@ -201,7 +201,7 @@ $page = ACTIVE_PAGE;
 					</li>
 				<?php } ?>
 
-				<li class=" <?= $page == "setDeliveryCharges" || $page == "addOnData" || $page == "addOnDataAdd" || $page == "metaData" || $page == "metaDataEdit" || $page == "mailSmtpSetting" || $page == "mailTemplateAll" || $page == "mailTemplateEdit" || $page == "faqAll" || $page == "faqAdd" || $page == "siteSettings" ? 'mm-active' : '' ?>">
+				<li class=" <?= $page == "setDeliveryCharges" || $page == "addOnData" || $page == "addOnDataAdd" || $page == "metaData" || $page == "metaDataEdit" || $page == "mailSmtpSetting" || $page == "mailTemplateAll" || $page == "mailTemplateEdit" || $page == "whatsappTest" || $page == "faqAll" || $page == "faqAdd" || $page == "siteSettings" ? 'mm-active' : '' ?>">
 					<a href="javascript: void(0);" class="has-arrow waves-effect">
 						<i class="mdi mdi-keyboard-settings"></i>
 						<span key="t-ecommerce">Setting</span>
@@ -214,6 +214,7 @@ $page = ACTIVE_PAGE;
 						<li><a href="<?= base_url('siteSettings') ?>" class="<?= $page == "siteSettings" ? 'active' : '' ?>">Social Links</a></li>
 						<li><a href="<?= base_url('mailSmtpSetting') ?>" class="<?= $page == "mailSmtpSetting" ? 'active' : '' ?>">SMTP Settings</a></li>
 						<li><a href="<?= base_url('mailTemplateAll') ?>" class="<?= $page == "mailTemplateAll" || $page == "mailTemplateEdit" ? 'active' : '' ?>">Mail Templates</a></li>
+						<li><a href="<?= base_url('whatsappTest') ?>" class="<?= $page == "whatsappTest" ? 'active' : '' ?>">WhatsApp Test</a></li>
 					</ul>
 				</li>
 

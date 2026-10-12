@@ -166,6 +166,6 @@ define('SHIPROCKET_API_URL', 'https://apiv2.shiprocket.in/v1/external/');
 // the panel's Accounts page - while it is empty no WhatsApp message is sent.
 define('WHATSAPP_API_URL', 'https://helloapi.lakshyapocketlab.com');
 define('WHATSAPP_API_KEY', getenv('WHATSAPP_API_KEY') !== false ? getenv('WHATSAPP_API_KEY') : 'hello_live_137f424e74de09d0c16972be3311c21668f25facfa47cb23');
-define('WHATSAPP_PHONE_NUMBER_ID', getenv('WHATSAPP_PHONE_NUMBER_ID') !== false ? getenv('WHATSAPP_PHONE_NUMBER_ID') : '');
+define('WHATSAPP_PHONE_NUMBER_ID', getenv('WHATSAPP_PHONE_NUMBER_ID') !== false ? getenv('WHATSAPP_PHONE_NUMBER_ID') : '1292373497297419');
 // Number that receives the admin alerts (new order, new return, ...). Empty = no admin alerts.
-define('WHATSAPP_ADMIN_NUMBER', getenv('WHATSAPP_ADMIN_NUMBER') !== false ? getenv('WHATSAPP_ADMIN_NUMBER') : '');
+define('WHATSAPP_ADMIN_NUMBER', getenv('WHATSAPP_ADMIN_NUMBER') !== false ? getenv('WHATSAPP_ADMIN_NUMBER') : '918518020944');

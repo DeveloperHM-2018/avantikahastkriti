@@ -52,6 +52,9 @@ $route['mailSmtpSetting'] = 'AdminHome/mailSmtpSetting';
 $route['mailTemplateAll'] = 'AdminHome/mailTemplateAll';
 $route['mailTemplateEdit'] = 'AdminHome/mailTemplateEdit';
 $route['testMail'] = 'AdminHome/testMail';
+$route['whatsappTest'] = 'AdminHome/whatsappTest';
+$route['whatsappTestPing'] = 'AdminHome/whatsappTestPing';
+$route['whatsappTestSend'] = 'AdminHome/whatsappTestSend';
 $route['addOrder'] = 'AdminHome/addOrder';
 $route['addOrderSave'] = 'AdminHome/addOrderSave';
 

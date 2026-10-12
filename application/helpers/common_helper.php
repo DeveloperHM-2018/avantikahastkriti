@@ -575,18 +575,40 @@ function curlResponse($url, $dataArray)
 // skipped WhatsApp message must not break the order/return flow calling it.
 function sendTemplatedWhatsapp($eventKey, $contactNo, $placeholders = [])
 {
+	$result = whatsappTemplateSend($eventKey, $contactNo, $placeholders);
+	if (!$result['success'] && $result['http_code'] !== null) {
+		log_message('error', "sendTemplatedWhatsapp: send failed for event '$eventKey' (template '{$result['template']}', HTTP {$result['http_code']}) - " . ($result['curl_error'] ?: $result['response']));
+	}
+	return $result['success'];
+}
+
+// Does the actual send for sendTemplatedWhatsapp() and reports everything that
+// happened, so the admin WhatsApp Test page can show the API's exact reply.
+// http_code stays null when the message was skipped before any API call, with
+// the reason in 'skipped'.
+function whatsappTemplateSend($eventKey, $contactNo, $placeholders = [])
+{
 	$ci = &get_instance();
 	$ci->config->load('whatsapp', false, true);
 	$templates = (array) $ci->config->item('whatsapp_templates');
+	$result = ['success' => false, 'skipped' => '', 'template' => '', 'to' => '', 'http_code' => null, 'request' => null, 'response' => '', 'curl_error' => ''];
 
-	if (WHATSAPP_PHONE_NUMBER_ID === '' || WHATSAPP_API_KEY === '' || empty($templates[$eventKey])) {
-		return false;
+	if (empty($templates[$eventKey])) {
+		$result['skipped'] = "No template is mapped to event '$eventKey' in config/whatsapp.php.";
+		return $result;
+	}
+	$template = $templates[$eventKey];
+	$result['template'] = $template['name'];
+	if (WHATSAPP_PHONE_NUMBER_ID === '' || WHATSAPP_API_KEY === '') {
+		$result['skipped'] = (WHATSAPP_API_KEY === '' ? 'WHATSAPP_API_KEY' : 'WHATSAPP_PHONE_NUMBER_ID') . ' is empty in config/constants.php, so no message is sent.';
+		return $result;
 	}
 	$to = formatWhatsappNumber($contactNo);
 	if ($to === false) {
-		return false;
+		$result['skipped'] = "'$contactNo' is not a valid mobile number.";
+		return $result;
 	}
-	$template = $templates[$eventKey];
+	$result['to'] = $to;
 
 	$parameters = [];
 	foreach ($template['params'] as $key) {
@@ -603,7 +625,7 @@ function sendTemplatedWhatsapp($eventKey, $contactNo, $placeholders = [])
 		$components[] = ['type' => 'button', 'sub_type' => 'url', 'index' => '0', 'parameters' => [$parameters[0]]];
 	}
 
-	$payload = [
+	$result['request'] = [
 		'to' => $to,
 		'type' => 'template',
 		'template' => [
@@ -612,24 +634,30 @@ function sendTemplatedWhatsapp($eventKey, $contactNo, $placeholders = [])
 			'components' => $components,
 		],
 	];
+	$api = whatsappApiRequest('/v1/' . WHATSAPP_PHONE_NUMBER_ID . '/messages', $result['request']);
+	$result['http_code'] = $api['http_code'];
+	$result['response'] = $api['response'];
+	$result['curl_error'] = $api['curl_error'];
+	$result['success'] = $api['http_code'] >= 200 && $api['http_code'] < 300;
+	return $result;
+}
 
-	$ch = curl_init(WHATSAPP_API_URL . '/v1/' . WHATSAPP_PHONE_NUMBER_ID . '/messages');
+// One call to the Hello WhatsApp API: POST when a payload is given, else GET.
+function whatsappApiRequest($path, $payload = null)
+{
+	$ch = curl_init(WHATSAPP_API_URL . $path);
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
-	curl_setopt($ch, CURLOPT_POST, 1);
-	curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+	if ($payload !== null) {
+		curl_setopt($ch, CURLOPT_POST, 1);
+		curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+	}
 	curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . WHATSAPP_API_KEY, 'Content-Type: application/json']);
 	curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
 	curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 	$response = curl_exec($ch);
-	$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-	$curlError = curl_error($ch);
+	$api = ['http_code' => (int) curl_getinfo($ch, CURLINFO_HTTP_CODE), 'response' => (string) $response, 'curl_error' => curl_error($ch)];
 	curl_close($ch);
-
-	if ($httpCode >= 200 && $httpCode < 300) {
-		return true;
-	}
-	log_message('error', "sendTemplatedWhatsapp: send failed for event '$eventKey' (template '{$template['name']}', HTTP $httpCode) - " . ($curlError ?: $response));
-	return false;
+	return $api;
 }
 
 // The API needs "+<country code><number>"; numbers are stored here as plain
