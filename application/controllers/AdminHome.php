@@ -1534,6 +1534,58 @@ class AdminHome extends CI_Controller
 		exit;
 	}
 
+	// Sample value for each placeholder used in config/whatsapp.php, so a test
+	// send fills every template variable with something WhatsApp accepts.
+	private $whatsappSampleValues = [
+		'otp' => '123456',
+		'name' => 'Test User',
+		'email' => 'test@example.com',
+		'order_id' => 'TEST1234',
+		'final_amount' => '999',
+		'status' => 'Dispatched',
+		'product_name' => 'Test Product',
+		'return_code' => 'RET1234',
+		'reject_reason' => 'Test reason',
+		'refund_amount' => '999',
+		'refund_method' => 'Original payment method',
+		'contact_name' => 'Test Vendor',
+		'business_name' => 'Test Business',
+		'vendor_name' => 'Test Vendor',
+		'expiry_minutes' => '30',
+	];
+
+	public function whatsappTest()
+	{
+		$this->config->load('whatsapp', false, true);
+		$data['title'] = 'WhatsApp Test';
+		$data['templates'] = (array) $this->config->item('whatsapp_templates');
+		$data['api_url'] = WHATSAPP_API_URL;
+		$data['api_key'] = WHATSAPP_API_KEY != '' ? substr(WHATSAPP_API_KEY, 0, 14) . str_repeat('*', 8) . substr(WHATSAPP_API_KEY, -4) : '';
+		$data['phone_number_id'] = WHATSAPP_PHONE_NUMBER_ID;
+		$data['admin_number'] = WHATSAPP_ADMIN_NUMBER;
+		$this->load->view('admin/whatsapp_test', $data);
+	}
+
+	public function whatsappTestPing()
+	{
+		if (WHATSAPP_API_KEY === '') {
+			echo json_encode(['success' => false, 'http_code' => null, 'skipped' => 'WHATSAPP_API_KEY is empty in config/constants.php.']);
+			exit;
+		}
+		$api = whatsappApiRequest('/v1/ping');
+		$api['success'] = $api['http_code'] >= 200 && $api['http_code'] < 300;
+		echo json_encode($api);
+		exit;
+	}
+
+	public function whatsappTestSend()
+	{
+		$placeholders = $this->whatsappSampleValues;
+		$placeholders['reset_link'] = base_url();
+		echo json_encode(whatsappTemplateSend($this->input->post('event_key'), $this->input->post('to'), $placeholders));
+		exit;
+	}
+
 	// Delivery Locations
 
 	public function deliveryLocation()
