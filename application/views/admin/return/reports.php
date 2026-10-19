@@ -119,7 +119,7 @@
                                     <thead>
                                         <tr>
                                             <th>Customer</th>
-                                            <th>Mobile</th>
+                                            <th>Mobile / Email</th>
                                             <th>Returns</th>
                                         </tr>
                                     </thead>
@@ -127,7 +127,7 @@
                                         <?php foreach ($customer_frequency as $c): ?>
                                             <tr>
                                                 <td><?= $c['name'] ?></td>
-                                                <td><?= $c['contact_no'] ?></td>
+                                                <td><?= htmlspecialchars(customerContactLabel($c['contact_no'], $c['email_id'])) ?></td>
                                                 <td><?= $c['cnt'] ?></td>
                                             </tr>
                                         <?php endforeach; ?>

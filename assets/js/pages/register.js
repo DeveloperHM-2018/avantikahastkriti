@@ -1,23 +1,13 @@
-import { submitForm, validateMobile } from "./formHandlers.js";
-import { chunkLoader } from "./loaders.js";
+import { initOtpForm } from "./otpFlow.js";
 
 const registrationForm = document.querySelector("#registration-form");
-const mobileField = registrationForm.querySelector("#number");
 
-mobileField?.addEventListener('input', validateMobile)
-
-registrationForm.addEventListener("submit", async (e) => {
-	e.preventDefault();
-	chunkLoader("add", `#${e.target.id}`);
-	const action = `Auth/registration/`;
-	await submitForm(e, action).then((isSuccess) => {
-		if (isSuccess) {
-			redirect("profile");
-		} else {
-			console.log("registration failed!");
-		}
-	});
-	chunkLoader("remove", `#${e.target.id}`);
+// The whole form is posted twice: first to send the OTP to the mobile/email
+// being registered, then again with the OTP to create the account.
+initOtpForm(registrationForm, {
+	action: `Auth/registration/`,
+	verifyLabel: "Verify & Create Account",
+	onSuccess: () => redirect("profile"),
 });
 
 //  === Password validation function ===

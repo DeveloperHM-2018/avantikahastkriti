@@ -31,11 +31,27 @@
                                         </div>
                                         <div class="col-lg-6">
                                             <label>Email Id : </label>
-                                            <span><?= $all_data['email_id'] ?></span>
+                                            <span><?= htmlspecialchars((string) $all_data['email_id']) ?: '----' ?></span>
                                         </div>
                                         <div class="col-lg-6">
                                             <label>Contact Number : </label>
-                                            <span><?= $all_data['email_id'] ?></span>
+                                            <span><?= htmlspecialchars((string) $all_data['contact_no']) ?: '----' ?></span>
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <label>Registered On : </label>
+                                            <span><?= dateConvertToView($all_data['create_date'], 3) ?></span>
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <label>Password Login : </label>
+                                            <span><?= userHasPassword($all_data) ? 'Set' : 'Not set (OTP only)' ?></span>
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <label>Orders : </label>
+                                            <span><?= (int) $order_stats['order_count'] ?> (paid total &#8377;<?= number_format((float) $order_stats['total_spent'], 2) ?>)</span>
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <label>Last Order : </label>
+                                            <span><?= $order_stats['last_order_date'] ? dateConvertToView($order_stats['last_order_date'], 3) : '----' ?></span>
                                         </div>
                                     </div>
                                     <div class="row mt-2">

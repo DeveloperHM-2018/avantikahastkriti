@@ -1,6 +1,26 @@
 <?php
 include('includes/header-link.php');
 include('includes/header.php');
+
+// Not found, or not this visitor's order (see Web::thankyou()).
+if (!$order) {
+?>
+    <div class="thankyou-block md:py-20 py-10 pb-30">
+        <div class="container text-center">
+            <div class="heading5">Order not found</div>
+            <p class="text-secondary mt-3">Your orders are listed in your account.</p>
+            <a href="<?= base_url('profile') ?>" class="button-main mt-5 inline-block">My Orders</a>
+        </div>
+    </div>
+<?php
+    include('includes/footer.php');
+    include('includes/footer-link.php');
+    return;
+}
+
+// An online order reaches this page from the payment handler; until the
+// payment is confirmed it must not read as a confirmed order.
+$paymentPending = $orderData['payment_mode'] != 'COD' && $orderData['transaction_status'] != '1';
 ?>
 
 <style>
@@ -18,10 +38,13 @@ include('includes/header.php');
         <div class="content-main flex max-lg:flex-col-reverse  gap-y-10 justify-between">
             <div class="left lg:w-1/2">
                 <div class="information">
-                    <div class="heading5">Order Confirmation</div>
+                    <div class="heading5"><?= $paymentPending ? 'Payment Pending' : 'Order Confirmation' ?></div>
+                    <?php if ($paymentPending): ?>
+                        <p class="text-secondary mt-3">We have not received confirmation of your payment yet. If money was deducted, your order will be confirmed automatically - otherwise please place the order again.</p>
+                    <?php endif; ?>
                     <div class="order-id-wrapper flex items-center gap-3 mt-5">
                         <div class="checkIcon">
-                            <i class="ph ph-check-circle" style="color: #64c364"></i>
+                            <i class="ph <?= $paymentPending ? 'ph-clock' : 'ph-check-circle' ?>" style="color: <?= $paymentPending ? '#d39e00' : '#64c364' ?>"></i>
                         </div>
                         <div class="order-id-label">
                             <div class="text-secondary relative">
@@ -125,7 +148,7 @@ include('includes/header.php');
     </div>
 </div>
 
-<?php if ($order): ?>
+<?php if ($order && !$paymentPending): ?>
     <script>
         // Guarded by a localStorage flag keyed on order id so refreshing or
         // revisiting this page (e.g. via back button) doesn't re-fire Purchase

@@ -243,7 +243,7 @@ class Test extends CI_Controller
                     'originPrice' => $row['market_price'],
                     'brand' => 'Brand',
                     'sold' => '0',
-                    'quantity' => $row['max_quantity'],
+                    'quantity' => $row['quantity'], // live stock - see Web::place_order()
                     'quantityPurchase' => 1,
                     "sizes" => $sizes,
                     'thumbImage' => $allProductImages,

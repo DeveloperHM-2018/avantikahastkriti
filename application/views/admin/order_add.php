@@ -32,7 +32,7 @@
                                             <option value="new">+ New Customer</option>
                                             <?php if ($all_customers) {
                                                 foreach ($all_customers as $c) { ?>
-                                                    <option value="<?= $c['user_id'] ?>"><?= $c['name'] ?> (<?= $c['contact_no'] ?>)</option>
+                                                    <option value="<?= $c['user_id'] ?>"><?= htmlspecialchars((string) $c['name']) ?> (<?= htmlspecialchars(customerContactLabel($c['contact_no'], $c['email_id'])) ?>)</option>
                                             <?php }
                                             } ?>
                                         </select>
@@ -110,6 +110,10 @@
                                             <option value="COD">Cash on Delivery</option>
                                             <option value="PAID_MANUAL">Already Paid (cash / bank transfer collected offline)</option>
                                         </select>
+                                    </div>
+                                    <div class="col-lg-3 mb-3">
+                                        <label class="col-form-label">Payment Reference</label>
+                                        <input class="form-control" type="text" name="payment_reference" maxlength="100" placeholder="UTR / receipt no. (if already paid)">
                                     </div>
                                     <div class="col-lg-3 mb-3">
                                         <label class="col-form-label">Delivery Charges</label>

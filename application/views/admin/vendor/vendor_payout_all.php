@@ -16,21 +16,25 @@
                     <div class="card">
                         <div class="card-body">
                             <h5>Unpaid Balances</h5>
+                            <p class="text-muted mb-2">A sale becomes payable once the order is completed, its <?= (int) $return_window_days ?>-day return window has passed, and no return request on it is awaiting a decision.</p>
                             <table class="table table-bordered">
-                                <thead><tr><th>Partner</th><th>Unpaid Lines</th><th>Unpaid Amount</th><th>Action</th></tr></thead>
+                                <thead><tr><th>Partner</th><th>Payable Lines</th><th>Payable Now</th><th>Not Yet Eligible</th><th>Action</th></tr></thead>
                                 <tbody>
                                     <?php if (empty($unpaid_summary)) : ?>
-                                        <tr><td colspan="4" class="text-center">Nothing outstanding.</td></tr>
+                                        <tr><td colspan="5" class="text-center">Nothing outstanding.</td></tr>
                                     <?php endif; ?>
                                     <?php foreach ($unpaid_summary as $row) : ?>
                                         <tr>
-                                            <td><?= $row['business_name'] ?></td>
+                                            <td><?= htmlspecialchars($row['business_name']) ?></td>
                                             <td><?= $row['unpaid_lines'] ?></td>
                                             <td>₹<?= number_format($row['unpaid_amount'], 2) ?></td>
+                                            <td>₹<?= number_format($row['pending_amount'], 2) ?></td>
                                             <td>
+                                                <?php if ($row['unpaid_amount'] > 0) : ?>
                                                 <button type="button" class="btn btn-primary btn-sm createPayoutBtn" data-vendor="<?= encryptId($row['vendor_id']) ?>">
                                                     <i class="fa fa-money-bill"></i> Create Payout
                                                 </button>
+                                                <?php endif; ?>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -78,7 +82,7 @@
 <script>
     $(document).on('click', '.createPayoutBtn', function() {
         var vendorId = $(this).data('vendor');
-        if (!confirm('Create a payout batch for every unpaid line for this partner?')) return;
+        if (!confirm('Create a payout batch for every payable line for this partner?')) return;
         $.post('<?= base_url('vendorPayoutCreate') ?>', {
             vendor_id: vendorId
         }, function(res) {

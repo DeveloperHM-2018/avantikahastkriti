@@ -7,6 +7,8 @@ $config['whatsapp_language'] = 'en';
 // Maps an internal notification event (same keys as tbl_mail_template) to
 // the approved WhatsApp template it is sent with.
 //   name       - template name exactly as created on the panel
+//   language   - only when the template was created in a language other than
+//                whatsapp_language above
 //   params     - placeholder keys, in the order of the template's {{1}}, {{2}}...
 //   otp_button - true for AUTHENTICATION templates, whose copy-code button
 //                needs the code passed a second time as a button parameter
@@ -14,8 +16,8 @@ $config['whatsapp_language'] = 'en';
 // without touching the email for the same event.
 $config['whatsapp_templates'] = [
 	// Customer
-	'login_otp' => ['name' => 'verification_code', 'params' => ['otp'], 'otp_button' => true],
-	'forgot_password_otp' => ['name' => 'verification_code', 'params' => ['otp'], 'otp_button' => true],
+	'login_otp' => ['name' => 'verification_code', 'language' => 'en_US', 'params' => ['otp'], 'otp_button' => true],
+	'forgot_password_otp' => ['name' => 'verification_code', 'language' => 'en_US', 'params' => ['otp'], 'otp_button' => true],
 	'user_registered_user' => ['name' => 'user_welcome', 'params' => ['name']],
 	'order_placed_user' => ['name' => 'order_placed_user', 'params' => ['name', 'order_id', 'final_amount']],
 	'order_status_updated_user' => ['name' => 'order_status_update', 'params' => ['name', 'order_id', 'status']],

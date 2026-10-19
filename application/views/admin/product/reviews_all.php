@@ -46,7 +46,7 @@
                                                 <td><?= htmlspecialchars($all['product_name']) ?></td>
                                                 <td>
                                                     <strong><?= htmlspecialchars($all['user_name']) ?></strong><br>
-                                                    <small class="text-muted"><?= htmlspecialchars($all['contact_no']) ?></small>
+                                                    <small class="text-muted"><?= htmlspecialchars(customerContactLabel($all['contact_no'], $all['email_id'])) ?></small>
                                                 </td>
                                                 <td>
                                                     <div class="text-warning">

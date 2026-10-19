@@ -491,9 +491,12 @@ class CommonModel extends CI_Model
 		}
 
 		// No separate payments ledger exists to catch a captured amount that
-		// doesn't match what was actually charged - log it for manual
-		// reconciliation instead of silently accepting whatever Razorpay sent.
+		// doesn't match what was actually charged. The money is already
+		// captured, so the order is still confirmed, but it goes to the admin
+		// review queue - log_message() alone was invisible (log_threshold is 0).
+		$amountMismatch = null;
 		if (isset($payment['amount']) && (int) round($order['final_amount'] * 100) !== (int) $payment['amount']) {
+			$amountMismatch = 'Payment amount mismatch: order total Rs. ' . number_format((float) $order['final_amount'], 2) . ', captured Rs. ' . number_format($payment['amount'] / 100, 2) . ' - verify before fulfilling.';
 			log_message('error', 'Razorpay amount mismatch for order ' . $order['order_id'] . ': expected ' . (int) round($order['final_amount'] * 100) . ' paise, captured ' . $payment['amount'] . ' paise');
 		}
 
@@ -515,14 +518,25 @@ class CommonModel extends CI_Model
 				if (!$existingUser) {
 					$newUserId = $this->insertRowReturnId('user_registration', [
 						'name' => isset($update['name']) ? $update['name'] : $order['name'],
-						'email_id' => isset($customer->email) ? $customer->email : '',
+						// No password and no unverified email - see Web::place_order().
 						'contact_no' => $customer->contact,
-						'password' => password_hash('123456', PASSWORD_DEFAULT),
 						'first_order' => 0,
 					]);
 					$existingUser = ['user_id' => $newUserId];
 				}
 				$this->updateRowById('book_product', 'product_book_id', $order['product_book_id'], ['user_id' => $existingUser['user_id']]);
+			}
+		}
+
+		// An unpaid online order can be cancelled by admin while the customer's
+		// payment is still in flight (UPI collect, a slow bank page). The
+		// payment is still recorded, but nothing is reserved or announced for
+		// a cancelled order - it goes to review so the money is refunded.
+		if ($applied) {
+			$current = $this->getSingleRowById('book_product', ['product_book_id' => $order['product_book_id']]);
+			if ($current && $current['booking_status'] == '2') {
+				$this->flagOrderForReview($order['product_book_id'], 'Payment captured after the order was cancelled - refund it from the Razorpay dashboard.');
+				return $applied;
 			}
 		}
 
@@ -540,10 +554,41 @@ class CommonModel extends CI_Model
 		}
 
 		if ($applied) {
+			if ($amountMismatch) {
+				$this->flagOrderForReview($order['product_book_id'], $amountMismatch);
+			}
+			// The mobile app lets a prepaid order be part-paid from the wallet;
+			// that balance is only taken once the gateway payment succeeds (see
+			// UserApi::createOrder_POST()). Orders created before that change
+			// were debited up front, so an existing debit for this order is
+			// never repeated.
+			if ((float) $order['wallet_amount'] > 0 && $order['user_id']) {
+				$message = 'Used on order ' . $order['order_id'];
+				if (!$this->getNumRows('wallet_history', ['user_id' => $order['user_id'], 'type' => 2, 'message' => $message])) {
+					if (!debitWallet($order['user_id'], (float) $order['wallet_amount'], $message)) {
+						$this->flagOrderForReview($order['product_book_id'], 'Wallet balance of Rs. ' . number_format((float) $order['wallet_amount'], 2) . ' could not be debited - the customer paid less than the order total.');
+					}
+				}
+			}
 			$this->decrementOrderStock($order['product_book_id'], true);
 		}
 
 		return $applied;
+	}
+
+	// Puts an order in the admin review queue (Inventory > Pinned Orders),
+	// keeping any reason already recorded on it.
+	public function flagOrderForReview($productBookId, $reason)
+	{
+		$order = $this->getSingleRowById('book_product', ['product_book_id' => $productBookId]);
+		if (!$order) {
+			return;
+		}
+		$existing = ($order['stock_flag'] == 1 && $order['stock_flag_reason']) ? $order['stock_flag_reason'] . ' | ' : '';
+		$this->db->set([
+			'stock_flag' => 1,
+			'stock_flag_reason' => substr($existing . $reason, 0, 255),
+		])->where('product_book_id', $productBookId)->update('book_product');
 	}
 
 	// ==============================================================
@@ -569,6 +614,15 @@ class CommonModel extends CI_Model
 		$failedItem = null;
 		$vendorIds = [];
 		foreach ($items as $item) {
+			// Claim the line before touching stock: the list above was read
+			// without a lock, so two confirmation paths running at once could
+			// both see stock_applied=0. Only the one whose UPDATE flips it gets
+			// to decrement; the other skips the line.
+			$this->db->set('stock_applied', 1)->where('book_item_id', $item['book_item_id'])->where('stock_applied', 0)->update('book_item');
+			if ($this->db->affected_rows() < 1) {
+				continue;
+			}
+
 			$result = $this->applyStockDecrement(
 				$item['product_id'],
 				$item['variant_id'],
@@ -588,8 +642,11 @@ class CommonModel extends CI_Model
 				break;
 			}
 
-			$this->db->set('stock_applied', 1)->where('book_item_id', $item['book_item_id'])->update('book_item');
 			if ($result['pinned']) {
+				// 2 = handled but nothing taken from stock, so a cancel/return
+				// (which restock only stock_applied=1 lines) never gives back
+				// units this line didn't remove.
+				$this->db->set('stock_applied', 2)->where('book_item_id', $item['book_item_id'])->update('book_item');
 				$anyPinned = true;
 			} else {
 				// A sale that actually took stock from inventory (not pinned) -
@@ -608,10 +665,7 @@ class CommonModel extends CI_Model
 		}
 
 		if ($anyPinned) {
-			$this->db->set([
-				'stock_flag' => 1,
-				'stock_flag_reason' => 'One or more items had insufficient stock when payment was confirmed - review and cancel/refund if the item cannot be fulfilled.',
-			])->where('product_book_id', $productBookId)->update('book_product');
+			$this->flagOrderForReview($productBookId, 'One or more items had insufficient stock when payment was confirmed - review and cancel/refund if the item cannot be fulfilled.');
 		}
 
 		$this->db->trans_complete();
@@ -647,9 +701,18 @@ class CommonModel extends CI_Model
 		$locked = $this->db->query("SELECT `{$qtyColumn}` AS qty FROM `{$table}` WHERE `{$idColumn}` = ? FOR UPDATE", [$rowId])->row_array();
 		$available = ($locked && $locked['qty'] !== null) ? (float) $locked['qty'] : 0;
 
+		// The FOR UPDATE above only holds a lock inside a transaction; manual
+		// adjustments (AdminInventory::stockAdjust()) call this without one.
+		// The stock condition on the UPDATE itself keeps stock from going
+		// negative either way.
+		$decremented = false;
 		if ($available >= $qty) {
+			$this->db->query("UPDATE `{$table}` SET `{$qtyColumn}` = `{$qtyColumn}` - ?, update_date = ? WHERE `{$idColumn}` = ? AND `{$qtyColumn}` >= ?", [$qty, date('Y-m-d H:i:s'), $rowId, $qty]);
+			$decremented = $this->db->affected_rows() > 0;
+		}
+
+		if ($decremented) {
 			$balanceAfter = $available - $qty;
-			$this->db->query("UPDATE `{$table}` SET `{$qtyColumn}` = `{$qtyColumn}` - ?, update_date = ? WHERE `{$idColumn}` = ?", [$qty, date('Y-m-d H:i:s'), $rowId]);
 			if (!$variantId) {
 				$this->autoToggleOutOfStock($productId, $balanceAfter);
 			}
@@ -736,10 +799,14 @@ class CommonModel extends CI_Model
 			return null;
 		}
 
+		// Any status, not just approved: a partner editing an approved
+		// product sends the submission back to Pending, but the live product
+		// keeps selling the partner's stock meanwhile. A row only gets a
+		// product_id once it has been approved, and commission_percent still
+		// holds the rate set at that approval.
 		$vendorProduct = $this->getSingleRowById('vendor_product', [
 			'vendor_id' => $product['default_vendor_id'],
 			'product_id' => $item['product_id'],
-			'status' => 1, // approved
 		]);
 		if (!$vendorProduct) {
 			return null;
@@ -762,6 +829,52 @@ class CommonModel extends CI_Model
 		]);
 
 		return $product['default_vendor_id'];
+	}
+
+	// A cancelled order owes its partners nothing. Unpaid lines are voided;
+	// returns how many lines were already in a payout batch or paid, which
+	// need a manual adjustment with the partner.
+	public function voidVendorOrderItems($productBookId)
+	{
+		$this->db->set('payout_status', VENDOR_LINE_VOID)
+			->where('product_book_id', $productBookId)
+			->where('payout_status', VENDOR_LINE_UNPAID)
+			->update('vendor_order_item');
+
+		return $this->getNumRows('vendor_order_item', "product_book_id = " . (int) $productBookId . " AND payout_status IN (" . VENDOR_LINE_IN_BATCH . ", " . VENDOR_LINE_PAID . ")");
+	}
+
+	// Reduces a partner's line by the returned quantity (voids it on a full
+	// return), scaling the commission snapshot taken at sale time. Returns
+	// false when the line was already batched or paid, so the caller can flag
+	// it; true when adjusted or when the line was never vendor-attributed.
+	public function adjustVendorLineForReturn($bookItemId, $quantityReturned)
+	{
+		$line = $this->getSingleRowById('vendor_order_item', ['book_item_id' => $bookItemId]);
+		if (!$line || $line['payout_status'] == VENDOR_LINE_VOID) {
+			return true;
+		}
+		if ($line['payout_status'] != VENDOR_LINE_UNPAID) {
+			return false;
+		}
+
+		$remaining = (float) $line['quantity'] - (float) $quantityReturned;
+		if ($remaining <= 0) {
+			$update = ['payout_status' => VENDOR_LINE_VOID];
+		} else {
+			$ratio = $remaining / (float) $line['quantity'];
+			$update = [
+				'quantity' => $remaining,
+				'commission_amount' => round($line['commission_amount'] * $ratio, 2),
+				'vendor_payable_amount' => round($line['vendor_payable_amount'] * $ratio, 2),
+			];
+		}
+		$this->db->set($update)
+			->where('vendor_order_item_id', $line['vendor_order_item_id'])
+			->where('payout_status', VENDOR_LINE_UNPAID)
+			->update('vendor_order_item');
+
+		return $this->db->affected_rows() > 0;
 	}
 
 	// Emails every vendor whose stock was actually attributed on this order

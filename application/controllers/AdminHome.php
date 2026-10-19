@@ -112,7 +112,7 @@ class AdminHome extends CI_Controller
 				COALESCE(SUM(delivery_charges), 0) AS shipping,
 				COUNT(*) AS total_orders
 			FROM tbl_book_product
-			WHERE booking_status != '2'
+			WHERE booking_status != '2' AND transaction_status = '1'
 				AND DATE(create_date) BETWEEN '$dateFrom' AND '$dateTo'",
 			2
 		);
@@ -149,7 +149,7 @@ class AdminHome extends CI_Controller
 				COALESCE(SUM(promocode_amount), 0) AS discounts,
 				COUNT(*) AS total_orders
 			FROM tbl_book_product
-			WHERE booking_status != '2'
+			WHERE booking_status != '2' AND transaction_status = '1'
 				AND DATE(create_date) BETWEEN '$dateFrom' AND '$dateTo'
 			GROUP BY DATE(create_date)",
 			1
@@ -216,7 +216,7 @@ class AdminHome extends CI_Controller
 			LEFT JOIN (SELECT product_id, MIN(product_image_id) AS img_id FROM tbl_product_image GROUP BY product_id) AS main_img
 				ON main_img.product_id = book_item.product_id
 			LEFT JOIN tbl_product_image AS image ON image.product_image_id = main_img.img_id
-			WHERE book_product.booking_status != '2'
+			WHERE book_product.booking_status != '2' AND book_product.transaction_status = '1'
 				AND DATE(book_product.create_date) BETWEEN '$dateFrom' AND '$dateTo'
 			GROUP BY book_item.product_id, book_item.product_name, image.image_path
 			ORDER BY total_revenue DESC
@@ -228,7 +228,7 @@ class AdminHome extends CI_Controller
 			"SELECT book_item.product_id, SUM(book_item.booking_price) AS prev_revenue
 			FROM tbl_book_item AS book_item
 			INNER JOIN tbl_book_product AS book_product ON book_product.product_book_id = book_item.product_book_id
-			WHERE book_product.booking_status != '2'
+			WHERE book_product.booking_status != '2' AND book_product.transaction_status = '1'
 				AND DATE(book_product.create_date) BETWEEN '$prevFrom' AND '$prevTo'
 			GROUP BY book_item.product_id",
 			1
@@ -400,16 +400,70 @@ class AdminHome extends CI_Controller
 
 	public function activeUser()
 	{
-		$data['title'] = "All Active Users";
-		$data['all_data'] = $this->CommonModel->getRowByIdInOrder('user_registration', "verify_status = '1' AND user_status = '1'", 'create_date', 'desc');
-		$data['is_register'] = 0;
-		$this->load->view('admin/users/user_all', $data);
+		$this->userList('1', "All Active Users");
 	}
 
 	public function inactiveUser()
 	{
-		$data['title'] = "All Inactive Users";
-		$data['all_data'] = $this->CommonModel->getRowByIdInOrder('user_registration', "verify_status = '1' AND user_status = '0'", 'create_date', 'desc');
+		$this->userList('0', "All Inactive Users");
+	}
+
+	// Shared by the Active / Inactive user screens. A customer signs up with a
+	// mobile number OR an email (the other is optional), so the list can be
+	// narrowed by either one and by which of the two an account actually has.
+	private function userList($userStatus, $title)
+	{
+		$filters = [
+			'name' => trim((string) $this->input->get('name')),
+			'mobile' => trim((string) $this->input->get('mobile')),
+			'email' => trim((string) $this->input->get('email')),
+			'contact' => (string) $this->input->get('contact'),
+		];
+		$hasMobile = "(u.contact_no IS NOT NULL AND u.contact_no != '')";
+		$hasEmail = "(u.email_id IS NOT NULL AND u.email_id != '')";
+		$contactTypes = [
+			'mobile_only' => "$hasMobile AND NOT $hasEmail",
+			'email_only' => "$hasEmail AND NOT $hasMobile",
+			'both' => "$hasMobile AND $hasEmail",
+		];
+		if (!isset($contactTypes[$filters['contact']])) {
+			$filters['contact'] = '';
+		}
+
+		$table = $this->db->dbprefix('user_registration');
+		$base = "u.verify_status = '1' AND u.user_status = '$userStatus'";
+
+		// Counts for the cards ignore the filters - they describe the whole list.
+		$data['stats'] = $this->CommonModel->runQuery(
+			"SELECT COUNT(*) AS total,
+			COALESCE(SUM($hasMobile AND NOT $hasEmail), 0) AS mobile_only,
+			COALESCE(SUM($hasEmail AND NOT $hasMobile), 0) AS email_only,
+			COALESCE(SUM($hasMobile AND $hasEmail), 0) AS both_contacts
+			FROM $table u WHERE $base",
+			2
+		);
+
+		$where = $base;
+		if ($filters['name'] !== '') {
+			$where .= " AND u.name LIKE '%" . $this->db->escape_like_str($filters['name']) . "%'";
+		}
+		$where .= customerContactFilterSql($filters['mobile'], ['u.contact_no'], true);
+		$where .= customerContactFilterSql($filters['email'], ['u.email_id']);
+		if ($filters['contact'] !== '') {
+			$where .= ' AND ' . $contactTypes[$filters['contact']];
+		}
+
+		$data['all_data'] = $this->CommonModel->runQuery(
+			"SELECT u.*, COALESCE(o.order_count, 0) AS order_count, COALESCE(o.total_spent, 0) AS total_spent
+			FROM $table u
+			LEFT JOIN (
+				SELECT user_id, COUNT(*) AS order_count, SUM(CASE WHEN transaction_status = '1' THEN final_amount ELSE 0 END) AS total_spent
+				FROM " . $this->db->dbprefix('book_product') . " GROUP BY user_id
+			) o ON o.user_id = u.user_id
+			WHERE $where ORDER BY u.create_date DESC"
+		);
+		$data['title'] = $title;
+		$data['filters'] = $filters;
 		$data['is_register'] = 0;
 		$this->load->view('admin/users/user_all', $data);
 	}
@@ -436,6 +490,14 @@ class AdminHome extends CI_Controller
 	{
 		$data['title'] = "User Details";
 		$data['all_data'] = $this->CommonModel->getSingleRowById('user_registration', ['user_id' => decryptId($id)]);
+		if (!$data['all_data']) {
+			show_404();
+		}
+		$data['order_stats'] = $this->CommonModel->runQuery(
+			"SELECT COUNT(*) AS order_count, COALESCE(SUM(CASE WHEN transaction_status = '1' THEN final_amount ELSE 0 END), 0) AS total_spent, MAX(create_date) AS last_order_date
+			FROM " . $this->db->dbprefix('book_product') . " WHERE user_id = " . (int) $data['all_data']['user_id'],
+			2
+		);
 		$this->load->view('admin/users/user_details', $data);
 	}
 
@@ -686,8 +748,13 @@ class AdminHome extends CI_Controller
 				// || leaves everything after it unprotected against the
 				// dbprefix'd table names, and the search value must be
 				// escaped since it's concatenated directly into the query.
-				$searchQuery .= " AND (book_product.create_date = '" . dateConvertToDb($searchValue) . "' OR book_product.order_id LIKE '%" . $this->db->escape_like_str($searchValue) . "%')";
+				$searchLike = " LIKE '%" . $this->db->escape_like_str($searchValue) . "%'";
+				$searchQuery .= " AND (book_product.create_date = '" . dateConvertToDb($searchValue) . "' OR book_product.order_id" . $searchLike . " OR book_product.name" . $searchLike . " OR book_product.contact_no" . $searchLike . " OR book_product.email" . $searchLike . ")";
 			}
+			// Match what was typed on the order or what is on the customer's
+			// account - they can differ, and an account may have only one of them.
+			$searchQuery .= customerContactFilterSql(isset($searchByMobile) ? $searchByMobile : '', ['book_product.contact_no', 'user_registration.contact_no'], true);
+			$searchQuery .= customerContactFilterSql(isset($searchByEmail) ? $searchByEmail : '', ['book_product.email', 'user_registration.email_id']);
 
 			// Deliberately NOT date(book_product.create_date) here - wrapping the
 			// column in a function call defeats CodeIgniter's raw where() parser,
@@ -794,13 +861,13 @@ class AdminHome extends CI_Controller
 					"create_date" => dateConvertToView($record['create_date'], 3),
 					"order_id" => $record['order_id'],
 					"name" => $record['name'],
-					"contact_no" => $record['contact_no'],
+					"contact_no" => htmlspecialchars(customerContactLabel($record['contact_no'], '', '')) . (!empty($record['email']) ? '<br><small class="text-muted">' . htmlspecialchars($record['email']) . '</small>' : ''),
 					"amount" => $amountCell,
 					"user_code" => $record['user_code'],
 					"order_details" => $order_details,
 					"item_details" => $item_details,
 					"booking_status" => $status,
-					"action" => @PREV['banner_add'] == 1 || USER_TYPE == '1' ? $action : '',
+					"action" => $this->canProcessOrders() ? $action : '',
 				);
 			}
 
@@ -847,7 +914,7 @@ class AdminHome extends CI_Controller
 				'unpaid' => $this->CommonModel->getNumRows('book_product', "transaction_status = '0'"),
 			];
 			$todayRevenue = $this->CommonModel->runQuery(
-				"SELECT COUNT(*) AS order_count, COALESCE(SUM(final_amount), 0) AS revenue FROM tbl_book_product WHERE transaction_status = '1' AND DATE(create_date) = CURDATE()",
+				"SELECT COUNT(*) AS order_count, COALESCE(SUM(final_amount), 0) AS revenue FROM tbl_book_product WHERE transaction_status = '1' AND booking_status != '2' AND DATE(create_date) = CURDATE()",
 				2
 			);
 			$data['snapshot']['today_orders'] = $todayRevenue ? (int) $todayRevenue['order_count'] : 0;
@@ -916,17 +983,45 @@ class AdminHome extends CI_Controller
 		$this->load->view('admin/order_details', $data);
 	}
 
+	// Same privilege the sub-admin form calls "Order Process". The orders grid
+	// used to gate its buttons on banner_add instead, and the endpoints below
+	// checked nothing at all.
+	private function canProcessOrders()
+	{
+		return @PREV['orders_process'] == 1 || USER_TYPE == '1';
+	}
+
+	// booking_status lifecycle, as offered by the orders grid:
+	//   0 New -> 1 Accepted -> 3 Dispatched -> 4 Completed, and 0 New -> 2 Cancelled.
+	// The status check is part of the UPDATE, so of two admins acting on the
+	// same order at once only one gets through, and a stale page or a
+	// hand-made request can't e.g. dispatch a cancelled order or cancel (and
+	// restock) a completed one.
+	private function transitionOrder($orderId, array $fromStatuses, array $update)
+	{
+		$update['update_date'] = date('Y-m-d H:i:s');
+		$this->db->where('product_book_id', $orderId)->where_in('booking_status', $fromStatuses)->update('book_product', $update);
+		return $this->db->affected_rows() > 0;
+	}
+
 	public function acceptOrder()
 	{
+		if (!$this->canProcessOrders()) {
+			flashData('errors', 'You do not have permission to process orders.');
+			redirect($_SERVER['HTTP_REFERER']);
+		}
 		$estimated_time = $this->input->post('estimated_time');
 		$estimated_date = $this->input->post('estimated_date');
 		$id = $this->input->post('id');
 		if ($estimated_time != '' and $id != '') {
 			$orderId = decryptId($id);
-			$update = $this->CommonModel->updateRowById('book_product', 'product_book_id', $orderId, array('booking_status' => '1', 'estimated_time' => $estimated_date . ' ' . date('h:i A', strtotime($estimated_time))));
-			$this->CommonModel->logAdminActivity(1, sessionId('admin_id'), 'order_accept', 'order', $orderId);
-			$this->notifyOrderStatus(decryptId($id), 'Accepted');
-			flashData('errors', 'Order accept successfully');
+			if ($this->transitionOrder($orderId, ['0'], array('booking_status' => '1', 'estimated_time' => $estimated_date . ' ' . date('h:i A', strtotime($estimated_time))))) {
+				$this->CommonModel->logAdminActivity(1, sessionId('admin_id'), 'order_accept', 'order', $orderId);
+				$this->notifyOrderStatus($orderId, 'Accepted');
+				flashData('errors', 'Order accept successfully');
+			} else {
+				flashData('errors', 'Only a new order can be accepted - this order has already moved on.');
+			}
 		} else {
 			flashData('errors', 'Something went wrong.');
 		}
@@ -935,18 +1030,37 @@ class AdminHome extends CI_Controller
 
 	public function cancelOrder()
 	{
+		if (!$this->canProcessOrders()) {
+			flashData('errors', 'You do not have permission to process orders.');
+			redirect($_SERVER['HTTP_REFERER']);
+		}
 		$cancel_msg = $this->input->post('cancel_msg');
 		$id = $this->input->post('id');
 		if ($cancel_msg != '' and $id != '') {
 			$orderId = decryptId($id);
-			$update = $this->CommonModel->updateRowById('book_product', 'product_book_id', $orderId, array('booking_status' => '2', 'cancel_message' => $cancel_msg, 'cancel_date' => date('d.m.Y')));
+			if (!$this->transitionOrder($orderId, ['0'], array('booking_status' => '2', 'cancel_message' => $cancel_msg, 'cancel_date' => date('d.m.Y')))) {
+				flashData('errors', 'Only a new order can be cancelled - this order has already moved on.');
+				redirect($_SERVER['HTTP_REFERER']);
+			}
 			// Restock is a no-op for lines that never actually decremented stock
 			// (e.g. an online order cancelled before payment was confirmed) -
 			// restockOrderItems only touches lines with stock_applied=1.
 			$this->CommonModel->restockOrderItems($orderId, 'order_restock_cancel', 1, sessionId('admin_id'));
+			$settledVendorLines = $this->CommonModel->voidVendorOrderItems($orderId);
 			$this->CommonModel->logAdminActivity(1, sessionId('admin_id'), 'order_cancel', 'order', $orderId, null, ['cancel_message' => $cancel_msg]);
-			$this->notifyOrderStatus(decryptId($id), 'Cancelled');
-			flashData('errors', 'Order Cancel successfully');
+			$this->notifyOrderStatus($orderId, 'Cancelled');
+
+			// There is no gateway refund integration - a captured online
+			// payment has to be refunded by hand from the Razorpay dashboard.
+			$order = $this->CommonModel->getSingleRowById('book_product', ['product_book_id' => $orderId]);
+			$message = 'Order Cancel successfully';
+			if ($order && $order['payment_mode'] != 'COD' && $order['transaction_status'] == '1' && !empty($order['payment_id'])) {
+				$message .= '. This order was paid online (payment ' . $order['payment_id'] . ') - refund Rs. ' . number_format((float) $order['final_amount'], 2) . ' from the Razorpay dashboard.';
+			}
+			if ($settledVendorLines > 0) {
+				$message .= ' ' . $settledVendorLines . ' partner sale line(s) on this order were already in a payout - adjust with the partner manually.';
+			}
+			flashData('errors', $message);
 		} else {
 			flashData('errors', 'Something went wrong.');
 		}
@@ -965,6 +1079,10 @@ class AdminHome extends CI_Controller
 	// longer Unpaid and this button stops being shown for it.
 	public function syncPaymentStatus()
 	{
+		if (!$this->canProcessOrders()) {
+			echo json_encode(['success' => false, 'message' => 'You do not have permission to process orders.']);
+			return;
+		}
 		$id = $this->input->post('id');
 		if (!$id) {
 			echo json_encode(['success' => false, 'message' => 'Missing order id.']);
@@ -1021,14 +1139,33 @@ class AdminHome extends CI_Controller
 
 	public function dispatchOrder($id, $type)
 	{
+		if (!$this->canProcessOrders()) {
+			flashData('errors', 'You do not have permission to process orders.');
+			redirect($_SERVER['HTTP_REFERER']);
+		}
 		$decrypt_id = decryptId($id);
+		$order = $this->CommonModel->getSingleRowById('book_product', ['product_book_id' => $decrypt_id]);
+		if (!$order || !in_array((string) $type, ['3', '4'], true)) {
+			flashData('errors', 'Something went wrong.');
+			redirect($_SERVER['HTTP_REFERER']);
+		}
+
 		if ($type == '3') {
-			$post['booking_status'] = '3';
+			// An online order can be accepted while still unpaid (so a stale
+			// one can be dealt with), but goods must not leave until the
+			// payment is confirmed.
+			if ($order['payment_mode'] != 'COD' && $order['transaction_status'] != '1') {
+				flashData('errors', 'Payment for this online order is not confirmed. Use Sync Payment, or cancel the order.');
+				redirect($_SERVER['HTTP_REFERER']);
+			}
+			if (!$this->transitionOrder($decrypt_id, ['1'], ['booking_status' => '3'])) {
+				flashData('errors', 'Only an accepted order can be dispatched.');
+				redirect($_SERVER['HTTP_REFERER']);
+			}
 			$message = "Order Dispatch successfully";
 
 			// Shiprocket Integration: Generate AWB and Request Pickup
-			$order = $this->CommonModel->getSingleRowById('book_product', ['product_book_id' => $decrypt_id]);
-			if ($order && $order['shiprocket_shipment_id']) {
+			if ($order['shiprocket_shipment_id']) {
 				$this->load->library('shiprocket');
 
 				// 1. Generate AWB
@@ -1054,9 +1191,13 @@ class AdminHome extends CI_Controller
 			// Delivery date drives the product-return eligibility window, so it
 			// has to be stamped at the exact moment an order is marked Completed.
 			$post['delivery_date'] = date('Y-m-d');
+			if (!$this->transitionOrder($decrypt_id, ['3'], $post)) {
+				flashData('errors', 'Only a dispatched order can be completed.');
+				redirect($_SERVER['HTTP_REFERER']);
+			}
 			$message = "Order Complete successfully";
 		}
-		$update = $this->CommonModel->updateRowById('book_product', 'product_book_id', $decrypt_id, $post);
+		$this->CommonModel->logAdminActivity(1, sessionId('admin_id'), $type == '3' ? 'order_dispatch' : 'order_complete', 'order', $decrypt_id);
 		$this->notifyOrderStatus($decrypt_id, $type == '3' ? 'Dispatched' : 'Completed');
 		flashData('errors', $message);
 		redirect($_SERVER['HTTP_REFERER']);
@@ -1158,9 +1299,24 @@ class AdminHome extends CI_Controller
 			if (!$product) {
 				continue;
 			}
-			$qty = !empty($quantities[$i]) ? floatval($quantities[$i]) : 1;
-			$unitPrice = !empty($prices[$i]) ? floatval($prices[$i]) : $product['sale_price'];
-			$lineTotal = $unitPrice * $qty;
+			if ($product['is_delete'] != '1') {
+				flashData('errors', $product['product_name'] . ' is discontinued and cannot be ordered.');
+				redirect('addOrder');
+				exit;
+			}
+			// Whole units only, and no negative prices: a negative or
+			// fractional quantity used to pass straight through, giving a
+			// negative line total that the stock decrement then skipped.
+			$rawQty = isset($quantities[$i]) && $quantities[$i] !== '' ? $quantities[$i] : '1';
+			$rawPrice = isset($prices[$i]) && $prices[$i] !== '' ? $prices[$i] : '';
+			if (!ctype_digit((string) $rawQty) || (int) $rawQty < 1 || ($rawPrice !== '' && (!is_numeric($rawPrice) || (float) $rawPrice < 0))) {
+				flashData('errors', 'Invalid quantity or price for ' . $product['product_name'] . '.');
+				redirect('addOrder');
+				exit;
+			}
+			$qty = (int) $rawQty;
+			$unitPrice = ($rawPrice !== '' && (float) $rawPrice > 0) ? round((float) $rawPrice, 2) : (float) $product['sale_price'];
+			$lineTotal = round($unitPrice * $qty, 2);
 			$totalItemAmount += $lineTotal;
 			$totalItems += $qty;
 			$items[] = [
@@ -1179,9 +1335,10 @@ class AdminHome extends CI_Controller
 			exit;
 		}
 
-		$deliveryCharges = !empty($delivery_charges) ? floatval($delivery_charges) : 0;
-		$packagingCharge = !empty($packaging_charge) ? floatval($packaging_charge) : 0;
-		$finalAmount = $totalItemAmount + $deliveryCharges + $packagingCharge;
+		$deliveryCharges = !empty($delivery_charges) ? max(0, floatval($delivery_charges)) : 0;
+		$packagingCharge = !empty($packaging_charge) ? max(0, floatval($packaging_charge)) : 0;
+		$finalAmount = round($totalItemAmount + $deliveryCharges + $packagingCharge, 2);
+		$paymentReference = trim((string) @$payment_reference);
 
 		$orderId = orderIdGenerateUser('book_product', 'order_id');
 		$orderData = [
@@ -1218,39 +1375,37 @@ class AdminHome extends CI_Controller
 			'delivery_possible' => '1',
 			'order_source' => ORDER_SOURCE_ADMIN_MANUAL,
 			'created_by_admin_id' => sessionId('admin_id'),
+			// Offline collection reference (UTR / receipt no.), in the same
+			// column online orders keep the gateway payment id in.
+			'payment_id' => ($payment_mode === 'PAID_MANUAL' && $paymentReference !== '') ? substr($paymentReference, 0, 100) : null,
+			'transaction_mode' => $payment_mode === 'PAID_MANUAL' ? 'manual' : null,
 		];
 
-		$this->db->trans_start();
+		// Order, lines and stock reservation commit together. Stock is taken
+		// right now - nothing went through a gateway, so on insufficient stock
+		// (a race lost against another order for the same item) the whole
+		// order is rolled back. It used to be left behind as a cancelled order
+		// still marked paid, which the revenue figures then counted.
+		$this->db->trans_begin();
 		$productBookId = $this->CommonModel->insertRowReturnId('book_product', $orderData);
+		$stockResult = ['success' => false, 'product_name' => ''];
 		if ($productBookId) {
 			foreach ($items as $item) {
 				$item['product_book_id'] = $productBookId;
 				$this->CommonModel->insertRow('book_item', $item);
 			}
+			$stockResult = $this->CommonModel->decrementOrderStock($productBookId, false, 'admin_manual_order_decrement', ACTOR_TYPE_ADMIN, sessionId('admin_id'));
 		}
-		$this->db->trans_complete();
 
-		if (!$productBookId || $this->db->trans_status() === false) {
-			flashData('errors', 'Something went wrong. Order not created.');
+		if (!$productBookId || !$stockResult['success'] || $this->db->trans_status() === false) {
+			$this->db->trans_rollback();
+			flashData('errors', $productBookId && $stockResult['product_name'] !== ''
+				? 'Insufficient stock for product: ' . $stockResult['product_name'] . '. Order was not created - adjust the quantity or restock first.'
+				: 'Something went wrong. Order not created.');
 			redirect('addOrder');
 			return;
 		}
-
-		// Reserved synchronously, right now - nothing has been charged through
-		// a gateway for this order, so on insufficient stock (a race lost
-		// against another order placed for the same item) it's rejected
-		// outright instead of pinned, exactly like the web COD checkout.
-		$stockResult = $this->CommonModel->decrementOrderStock($productBookId, false, 'admin_manual_order_decrement', ACTOR_TYPE_ADMIN, sessionId('admin_id'));
-		if (!$stockResult['success']) {
-			$this->CommonModel->updateRowById('book_product', 'product_book_id', $productBookId, [
-				'booking_status' => 2,
-				'cancel_message' => 'Insufficient stock for ' . $stockResult['product_name'],
-				'cancel_date' => date('Y-m-d H:i:s'),
-			]);
-			flashData('errors', 'Insufficient stock for product: ' . $stockResult['product_name'] . '. Order was not created - adjust the quantity or restock first.');
-			redirect('addOrder');
-			return;
-		}
+		$this->db->trans_commit();
 
 		$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'order_manual_create', 'order', $productBookId, null, ['order_id' => $orderId, 'final_amount' => $finalAmount]);
 

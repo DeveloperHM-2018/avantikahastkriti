@@ -54,7 +54,7 @@ class AdminReports extends CI_Controller
 			"SELECT COUNT(*) AS order_count, COALESCE(SUM(final_amount), 0) AS gross_sales,
 			COALESCE(SUM(total_items), 0) AS total_units
 			FROM tbl_book_product
-			WHERE transaction_status = '1' AND DATE(booking_date) BETWEEN '{$range['from']}' AND '{$range['to']}'",
+			WHERE transaction_status = '1' AND booking_status != '2' AND DATE(booking_date) BETWEEN '{$range['from']}' AND '{$range['to']}'",
 			2
 		);
 		$data['order_count'] = $summary ? (int) $summary['order_count'] : 0;
@@ -64,7 +64,7 @@ class AdminReports extends CI_Controller
 		$data['daily_sales'] = $this->CommonModel->runQuery(
 			"SELECT DATE(booking_date) AS d, COUNT(*) AS orders, SUM(final_amount) AS amount
 			FROM tbl_book_product
-			WHERE transaction_status = '1' AND DATE(booking_date) BETWEEN '{$range['from']}' AND '{$range['to']}'
+			WHERE transaction_status = '1' AND booking_status != '2' AND DATE(booking_date) BETWEEN '{$range['from']}' AND '{$range['to']}'
 			GROUP BY DATE(booking_date) ORDER BY d ASC",
 			1
 		) ?: [];
@@ -73,7 +73,7 @@ class AdminReports extends CI_Controller
 			"SELECT bi.product_id, bi.product_name, SUM(bi.no_of_items) AS qty_sold, SUM(bi.booking_price) AS revenue
 			FROM tbl_book_item bi
 			INNER JOIN tbl_book_product bp ON bp.product_book_id = bi.product_book_id
-			WHERE bp.transaction_status = '1' AND DATE(bp.booking_date) BETWEEN '{$range['from']}' AND '{$range['to']}'
+			WHERE bp.transaction_status = '1' AND bp.booking_status != '2' AND DATE(bp.booking_date) BETWEEN '{$range['from']}' AND '{$range['to']}'
 			GROUP BY bi.product_id ORDER BY revenue DESC LIMIT 15",
 			1
 		) ?: [];
@@ -81,7 +81,7 @@ class AdminReports extends CI_Controller
 		$data['by_source'] = $this->CommonModel->runQuery(
 			"SELECT order_source, COUNT(*) AS orders, SUM(final_amount) AS amount
 			FROM tbl_book_product
-			WHERE transaction_status = '1' AND DATE(booking_date) BETWEEN '{$range['from']}' AND '{$range['to']}'
+			WHERE transaction_status = '1' AND booking_status != '2' AND DATE(booking_date) BETWEEN '{$range['from']}' AND '{$range['to']}'
 			GROUP BY order_source",
 			1
 		) ?: [];
@@ -189,7 +189,7 @@ class AdminReports extends CI_Controller
 			SUM(CASE WHEN voi.payout_status = 0 THEN voi.vendor_payable_amount ELSE 0 END) AS unpaid_total
 			FROM tbl_vendor_order_item voi
 			LEFT JOIN tbl_vendor v ON v.vendor_id = voi.vendor_id
-			WHERE DATE(voi.create_date) BETWEEN '{$range['from']}' AND '{$range['to']}'
+			WHERE voi.payout_status != " . VENDOR_LINE_VOID . " AND DATE(voi.create_date) BETWEEN '{$range['from']}' AND '{$range['to']}'
 			GROUP BY voi.vendor_id ORDER BY payable_total DESC",
 			1
 		) ?: [];
@@ -198,7 +198,7 @@ class AdminReports extends CI_Controller
 			"SELECT COUNT(DISTINCT vendor_id) AS active_vendors, COALESCE(SUM(commission_amount), 0) AS total_commission,
 			COALESCE(SUM(vendor_payable_amount), 0) AS total_payable
 			FROM tbl_vendor_order_item
-			WHERE DATE(create_date) BETWEEN '{$range['from']}' AND '{$range['to']}'",
+			WHERE payout_status != " . VENDOR_LINE_VOID . " AND DATE(create_date) BETWEEN '{$range['from']}' AND '{$range['to']}'",
 			2
 		);
 		$data['active_vendors'] = $summary ? (int) $summary['active_vendors'] : 0;

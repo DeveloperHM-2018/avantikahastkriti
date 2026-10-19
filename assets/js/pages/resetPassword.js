@@ -6,7 +6,7 @@ const resetPasswordForm = document.querySelector("#reset-password-form");
 resetPasswordForm.addEventListener("submit", async (e) => {
     chunkLoader("add", `#${e.target.id}`);
     const action = `Auth/resetPassword/`;
-    const redirectUrl = e.target.getAttribute("data-redirect") || "login";
+    const redirectUrl = e.target.getAttribute("data-redirect") || "profile";
     await submitForm(e, action).then((isSuccess) => {
         if (isSuccess) {
             redirect(redirectUrl);

@@ -339,7 +339,7 @@ class AdminVendor extends CI_Controller
 		$salesRow = $this->CommonModel->runQuery(
 			"SELECT COALESCE(SUM(commission_amount), 0) AS commission, COALESCE(SUM(vendor_payable_amount), 0) AS payable,
 			SUM(CASE WHEN payout_status = 2 THEN vendor_payable_amount ELSE 0 END) AS paid
-			FROM tbl_vendor_order_item WHERE vendor_id = " . (int) $id,
+			FROM tbl_vendor_order_item WHERE vendor_id = " . (int) $id . " AND payout_status != " . VENDOR_LINE_VOID,
 			2
 		);
 		$data['total_commission'] = $salesRow ? (float) $salesRow['commission'] : 0;
@@ -590,8 +590,27 @@ class AdminVendor extends CI_Controller
 		$this->load->view('admin/vendor/vendor_product_review', $data);
 	}
 
+	// SQL condition (on alias voi) for an unpaid partner line that can be paid
+	// out now. The rule comes from settings that already exist: an order is
+	// final once Completed (booking_status 4) and its return window
+	// (tbl_setting.return_window_days, see isReturnEligible()) has passed, and
+	// no return request on the line is still awaiting a decision. Approved
+	// returns have already reduced or voided the line (see
+	// CommonModel::adjustVendorLineForReturn()); cancelled orders have voided
+	// it. Paying earlier meant partners were paid for cancelled, undelivered
+	// and returned items, with no way to claw it back.
+	private function payableLineCondition()
+	{
+		return "voi.payout_status = " . VENDOR_LINE_UNPAID . "
+			AND EXISTS (SELECT 1 FROM tbl_book_product bp WHERE bp.product_book_id = voi.product_book_id
+				AND bp.booking_status = '4' AND bp.delivery_date IS NOT NULL
+				AND DATE_ADD(bp.delivery_date, INTERVAL " . (int) getReturnWindowDays() . " DAY) < CURDATE())
+			AND NOT EXISTS (SELECT 1 FROM tbl_return_request rr WHERE rr.book_item_id = voi.book_item_id
+				AND rr.status IN (" . RETURN_STATUS_REQUESTED . ", " . RETURN_STATUS_UNDER_REVIEW . "))";
+	}
+
 	// Vendor-wise unpaid balance, with a "Create Payout" action that snapshots
-	// every currently-unpaid line into one tbl_vendor_payout batch.
+	// every currently-payable line into one tbl_vendor_payout batch.
 	public function vendorPayoutAll()
 	{
 		if (!$this->canView()) {
@@ -599,13 +618,17 @@ class AdminVendor extends CI_Controller
 		}
 
 		$data['title'] = 'Partner Payouts';
+		$data['return_window_days'] = getReturnWindowDays();
 		$data['unpaid_summary'] = $this->CommonModel->runQuery(
-			"SELECT voi.vendor_id, vendor.business_name, SUM(voi.vendor_payable_amount) AS unpaid_amount, COUNT(*) AS unpaid_lines
+			"SELECT voi.vendor_id, vendor.business_name,
+				SUM(CASE WHEN " . $this->payableLineCondition() . " THEN voi.vendor_payable_amount ELSE 0 END) AS unpaid_amount,
+				SUM(CASE WHEN " . $this->payableLineCondition() . " THEN 1 ELSE 0 END) AS unpaid_lines,
+				SUM(CASE WHEN " . $this->payableLineCondition() . " THEN 0 ELSE voi.vendor_payable_amount END) AS pending_amount
 			FROM tbl_vendor_order_item voi
 			LEFT JOIN tbl_vendor vendor ON vendor.vendor_id = voi.vendor_id
-			WHERE voi.payout_status = 0
+			WHERE voi.payout_status = " . VENDOR_LINE_UNPAID . "
 			GROUP BY voi.vendor_id
-			HAVING unpaid_amount > 0
+			HAVING unpaid_amount > 0 OR pending_amount > 0
 			ORDER BY unpaid_amount DESC",
 			1
 		) ?: [];
@@ -630,33 +653,44 @@ class AdminVendor extends CI_Controller
 			return;
 		}
 
+		// The lines are locked and then batched by id, so the total recorded on
+		// the payout is exactly the sum of the lines it covers - a sale landing
+		// between the SUM and the UPDATE, or a second click, can't slip in.
 		$this->db->trans_start();
-		$row = $this->CommonModel->runQuery(
-			"SELECT SUM(vendor_payable_amount) AS total, MIN(create_date) AS from_date, MAX(create_date) AS to_date
-			FROM tbl_vendor_order_item WHERE vendor_id = " . (int) $vendorId . " AND payout_status = 0",
-			2
-		);
-		if (!$row || (float) $row['total'] <= 0) {
+		$lines = $this->CommonModel->runQuery(
+			"SELECT voi.vendor_order_item_id, voi.vendor_payable_amount, voi.create_date
+			FROM tbl_vendor_order_item voi
+			WHERE voi.vendor_id = " . (int) $vendorId . " AND " . $this->payableLineCondition() . "
+			FOR UPDATE",
+			1
+		) ?: [];
+		$total = round(array_sum(array_column($lines, 'vendor_payable_amount')), 2);
+		if (!$lines || $total <= 0) {
 			$this->db->trans_complete();
-			echo json_encode(['status' => false, 'message' => 'Nothing unpaid for this partner.']);
+			echo json_encode(['status' => false, 'message' => 'Nothing payable for this partner yet.']);
 			return;
 		}
+		$dates = array_column($lines, 'create_date');
 
 		$payoutId = $this->CommonModel->insertRowReturnId('vendor_payout', [
 			'vendor_id' => $vendorId,
-			'period_from' => date('Y-m-d', strtotime($row['from_date'])),
-			'period_to' => date('Y-m-d', strtotime($row['to_date'])),
-			'total_amount' => $row['total'],
+			'period_from' => date('Y-m-d', strtotime(min($dates))),
+			'period_to' => date('Y-m-d', strtotime(max($dates))),
+			'total_amount' => $total,
 			'status' => 0,
 		]);
-		$this->db->set(['payout_status' => 1, 'payout_id' => $payoutId])
-			->where('vendor_id', $vendorId)
-			->where('payout_status', 0)
+		$this->db->set(['payout_status' => VENDOR_LINE_IN_BATCH, 'payout_id' => $payoutId])
+			->where_in('vendor_order_item_id', array_column($lines, 'vendor_order_item_id'))
+			->where('payout_status', VENDOR_LINE_UNPAID)
 			->update('vendor_order_item');
-		$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'vendor_payout_create', 'vendor_payout', $payoutId, null, ['vendor_id' => $vendorId, 'total_amount' => $row['total']]);
+		$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'vendor_payout_create', 'vendor_payout', $payoutId, null, ['vendor_id' => $vendorId, 'total_amount' => $total, 'lines' => count($lines)]);
 		$this->db->trans_complete();
 
-		echo json_encode(['status' => true, 'message' => 'Payout batch created for ₹' . $row['total'] . '.']);
+		if ($this->db->trans_status() === false) {
+			echo json_encode(['status' => false, 'message' => 'Could not create the payout batch. Nothing was changed.']);
+			return;
+		}
+		echo json_encode(['status' => true, 'message' => 'Payout batch created for ₹' . number_format($total, 2) . '.']);
 	}
 
 	public function vendorPayoutMarkPaid()
@@ -672,15 +706,25 @@ class AdminVendor extends CI_Controller
 			return;
 		}
 
+		// Only a pending payout can be marked paid, once - a repeat click or a
+		// replayed request must not overwrite the recorded bank reference.
 		$this->db->trans_start();
-		$this->CommonModel->updateRowById('vendor_payout', 'payout_id', $payoutId, [
+		$this->db->set([
 			'status' => 1,
 			'payment_reference' => $reference,
 			'processed_by' => sessionId('admin_id'),
 			'processed_date' => date('Y-m-d H:i:s'),
-		]);
-		$this->db->set('payout_status', 2)->where('payout_id', $payoutId)->update('vendor_order_item');
+		])->where('payout_id', $payoutId)->where('status', 0)->update('vendor_payout');
+		$applied = $this->db->affected_rows() > 0;
+		if ($applied) {
+			$this->db->set('payout_status', VENDOR_LINE_PAID)->where('payout_id', $payoutId)->where('payout_status', VENDOR_LINE_IN_BATCH)->update('vendor_order_item');
+		}
 		$this->db->trans_complete();
+
+		if (!$applied) {
+			echo json_encode(['status' => false, 'message' => 'This payout is already marked as paid (or does not exist).']);
+			return;
+		}
 		$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'vendor_payout_paid', 'vendor_payout', $payoutId, null, ['payment_reference' => $reference]);
 
 		echo json_encode(['status' => true, 'message' => 'Payout marked as paid.']);

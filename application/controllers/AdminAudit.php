@@ -36,7 +36,11 @@ class AdminAudit extends CI_Controller
 			$postData = $this->input->post();
 			$dateFrom = $this->input->post('searchByDateFrom') ?: date('Y-m-d', strtotime('-7 days'));
 			$dateTo = $this->input->post('searchByDateTo') ?: date('Y-m-d');
-			$searchQuery = " AND DATE(admin_activity_log.create_date) BETWEEN '" . date('Y-m-d', strtotime($dateFrom)) . "' AND '" . date('Y-m-d', strtotime($dateTo)) . "'";
+			// A plain range, not DATE(column): CI's raw where() parser stops
+			// adding the tbl_ prefix to an identifier inside a function call,
+			// so DATE(admin_activity_log.create_date) was an unknown column and
+			// this grid never loaded (same issue as AdminHome::allOrders()).
+			$searchQuery = " AND admin_activity_log.create_date >= '" . date('Y-m-d', strtotime($dateFrom)) . " 00:00:00' AND admin_activity_log.create_date <= '" . date('Y-m-d', strtotime($dateTo)) . " 23:59:59'";
 
 			$actionFilter = $this->input->post('searchByAction');
 			if (!empty($actionFilter)) {

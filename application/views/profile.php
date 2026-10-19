@@ -31,8 +31,9 @@ include('includes/header.php');
                         <div class="avatar">
                             <img src="<?= base_url() ?>assets/img/avatar.png" alt="avatar" class="md:w-[140px] w-[120px] md:h-[140px] h-[120px] rounded-full" />
                         </div>
-                        <div class="name heading6 mt-4 text-center"><?= $profileData['name'] ?></div>
-                        <div class="mail heading6 font-normal normal-case text-secondary text-center mt-1"><?= $profileData['email_id'] ?></div>
+                        <div class="name heading6 mt-4 text-center"><?= htmlspecialchars((string) $profileData['name']) ?></div>
+                        <?php // An account has a mobile number, an email, or both. ?>
+                        <div class="mail heading6 font-normal normal-case text-secondary text-center mt-1"><?= htmlspecialchars((string) ($profileData['email_id'] ?: $profileData['contact_no'])) ?></div>
                     </div>
                     <div class="menu-tab list-category w-full max-w-none lg:mt-10 mt-6">
                         <a href="#dashboard" class="category-item flex items-center gap-3 w-full px-5 py-4 rounded-lg cursor-pointer duration-300 hover:bg-white active" data-item="dashboard">
@@ -299,31 +300,68 @@ include('includes/header.php');
                         <div class="formMsg"></div>
                         <div class="heading5 pb-4">Information</div>
                         <div class="grid sm:grid-cols-2 gap-4 gap-y-5 mt-5">
-                            <div class="first-name">
-                                <label for="firstName" class="caption1 capitalize">First Name <span class="text-red">*</span></label>
-                                <input class="border-line mt-2 px-4 py-3 w-full rounded-lg" id="name" type="text" value="<?= $profileData['name'] ?>" name="name" placeholder="First name" required />
-                            </div>
-                            <div class="phone-number">
-                                <label for="contact_no" class="caption1 capitalize">Phone Number <span class="text-red">*</span></label>
-                                <input class="border-line mt-2 px-4 py-3 w-full rounded-lg" id="number" name="number" type="text" value="<?= $profileData['contact_no'] ?>" placeholder="Phone number" required />
-                            </div>
-                            <div class="email col-span-full">
-                                <label for="email" class="caption1 capitalize">Email Address <span class="text-red">*</span></label>
-                                <input class="border-line mt-2 px-4 py-3 w-full rounded-lg" id="email" name="email" type="email" value="<?= $profileData['email_id'] ?>" placeholder="Email address" required />
+                            <div class="first-name col-span-full">
+                                <label for="name" class="caption1 capitalize">Name <span class="text-red">*</span></label>
+                                <input class="border-line mt-2 px-4 py-3 w-full rounded-lg" id="name" type="text" value="<?= htmlspecialchars((string) $profileData['name']) ?>" name="name" maxlength="100" placeholder="Your name" required />
                             </div>
                         </div>
                         <div class="block-button lg:mt-10 mt-6">
                             <button class="button-main">Save Change</button>
                         </div>
                     </form>
+
+                    <?php
+                    // Mobile number and email are what the customer logs in
+                    // with, so each is changed on its own and only after an
+                    // OTP sent to the new one (Auth::updateContact).
+                    $contactRows = [
+                        'mobile' => ['label' => 'Mobile Number', 'value' => $profileData['contact_no']],
+                        'email' => ['label' => 'Email Address', 'value' => $profileData['email_id']],
+                    ];
+                    ?>
+                    <div class="mt-10 pt-10 border-t border-line">
+                        <div class="heading5 pb-2">Login &amp; Contact Details</div>
+                        <div class="text-secondary">You can login with either of these. We verify a new one with a one-time code before saving it.</div>
+                        <div class="mt-3">
+                            <?php foreach ($contactRows as $type => $row): ?>
+                                <div class="contact-row">
+                                    <div>
+                                        <div class="caption1 capitalize text-secondary"><?= $row['label'] ?></div>
+                                        <div class="heading6 normal-case mt-1" data-contact-value="<?= $type ?>"><?= $row['value'] ? htmlspecialchars($row['value']) : 'Not added' ?></div>
+                                    </div>
+                                    <button type="button" class="auth-link" data-contact-edit="<?= $type ?>" data-contact-label="<?= $row['label'] ?>"><?= $row['value'] ? 'Change' : 'Add' ?></button>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <form id="contact-form" method="POST" class="auth-form mt-6" hidden>
+                            <div class="formMsg"></div>
+                            <div class="identifier">
+                                <label class="caption1 capitalize" data-contact-form-label>New Mobile Number</label>
+                                <input class="border-line mt-2 px-4 py-3 w-full rounded-lg" name="identifier" type="tel" />
+                                <div class="error-message text-red text-sm mt-1"></div>
+                                <div class="auth-hint mt-2" data-channel-hint></div>
+                            </div>
+                            <?php include('includes/auth-otp.php'); ?>
+                            <div class="block-button mt-6 flex items-center gap-5">
+                                <button class="button-main">Get OTP</button>
+                                <button type="button" class="auth-link" data-contact-cancel>Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+
                     <form id="change-password-form" method="POST" class="mt-10 pt-10 border-t border-line">
                         <div class="formMsg"></div>
-                        <div class="heading5 pb-4">Change Password</div>
+                        <div class="heading5 pb-4"><?= $hasPassword ? 'Change Password' : 'Set a Password' ?></div>
+                        <?php if (!$hasPassword): ?>
+                            <div class="text-secondary">Your account has no password yet - you login with an OTP. Set one if you would also like to login with a password.</div>
+                        <?php endif; ?>
                         <div class="grid sm:grid-cols-2 gap-4 gap-y-5 mt-5">
-                            <div class="current-password col-span-full">
-                                <label for="current_password" class="caption1 capitalize">Current Password <span class="text-red">*</span></label>
-                                <input class="border-line mt-2 px-4 py-3 w-full rounded-lg" id="current_password" name="current_password" type="password" placeholder="Current password" required />
-                            </div>
+                            <?php if ($hasPassword): ?>
+                                <div class="current-password col-span-full">
+                                    <label for="current_password" class="caption1 capitalize">Current Password <span class="text-red">*</span></label>
+                                    <input class="border-line mt-2 px-4 py-3 w-full rounded-lg" id="current_password" name="current_password" type="password" placeholder="Current password" required />
+                                </div>
+                            <?php endif; ?>
                             <div class="new-password">
                                 <label for="new_password" class="caption1 capitalize">New Password <span class="text-red">*</span></label>
                                 <input class="border-line mt-2 px-4 py-3 w-full rounded-lg" id="new_password" name="new_password" type="password" placeholder="New password" required />
@@ -334,7 +372,7 @@ include('includes/header.php');
                             </div>
                         </div>
                         <div class="block-button lg:mt-10 mt-6">
-                            <button class="button-main">Change Password</button>
+                            <button class="button-main"><?= $hasPassword ? 'Change Password' : 'Set Password' ?></button>
                         </div>
                     </form>
                 </div>
