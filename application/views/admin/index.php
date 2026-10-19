@@ -225,9 +225,11 @@
                             </ol>
                         </div>
                         <div class="d-flex gap-2">
-                            <!-- <a href="<?= base_url('addOrder') ?>" class="btn btn-success btn-sm">
-                                <i class="bx bx-plus align-middle"></i> New Order
-                            </a> -->
+                            <?php if (@PREV['orders_manual_create'] == 1 || USER_TYPE == '1') { ?>
+                                <a href="<?= base_url('addOrder') ?>" class="btn btn-success btn-sm">
+                                    <i class="bx bx-plus align-middle"></i> New Order
+                                </a>
+                            <?php } ?>
                             <button type="button" id="refreshDataBtn" class="btn btn-outline-secondary btn-sm">
                                 <i class="bx bx-refresh align-middle"></i> Refresh Data
                             </button>

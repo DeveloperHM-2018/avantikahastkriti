@@ -27,27 +27,25 @@ include('includes/header.php');
         <div class="content-main flex gap-y-8 max-md:flex-col">
             <div class="left md:w-1/2 w-full lg:pr-[60px] md:pr-[40px] md:border-r border-line">
                 <div class="heading4">Register</div>
-                <form class="md:mt-7 mt-4" id="registration-form" method="POST">
+                <div class="mt-2 text-secondary">Just your name and a mobile number or email - we'll verify it with a one-time code.</div>
+                <form class="auth-form md:mt-7 mt-4" id="registration-form" method="POST">
                     <div class="formMsg">
                     </div>
-                    <div class="name">
-                        <input class="border-line px-4 pt-3 pb-3 w-full rounded-lg" id="name" name="name" type="text" placeholder="Name *" />
+                    <div class="name mb-5">
+                        <input class="border-line px-4 pt-3 pb-3 w-full rounded-lg" id="name" name="name" type="text" maxlength="100" autocomplete="name" placeholder="Name *" />
                         <div class="error-message text-red text-sm mt-1"></div>
                     </div>
-                    <div class="email mt-5">
-                        <input class="border-line px-4 pt-3 pb-3 w-full rounded-lg" id="email" name="email" type="text" placeholder="Email address *" />
-                        <div class="error-message text-red text-sm mt-1"></div>
-                    </div>
-                    <div class="number mt-5">
-                        <input class="border-line px-4 pt-3 pb-3 w-full rounded-lg" id="number" name="number" type="tel" placeholder="Mobile Number (optional)" />
-                        <div class="error-message text-red text-sm mt-1"></div>
-                    </div>
+                    <?php
+                    $identifierValue = $this->input->get('identifier');
+                    include('includes/auth-identifier.php');
+                    ?>
                     <div class="pass mt-5 ">
                         <div class="relative text-right">
                             <a href="javascript: void(0);" class="text-black hover:underline pl-1" onclick="showPassword('password', 'loginEye')"><i class="ph ph-eye password-eye-btn relative text-black hover:underline" id="loginEye"></i>Show</a>
-                            <input class="border-line px-4 pt-3 pb-3 w-full rounded-lg" id="password" name="password" type="password" placeholder="Password *" />
+                            <input class="border-line px-4 pt-3 pb-3 w-full rounded-lg" id="password" name="password" type="password" autocomplete="new-password" placeholder="Password (optional)" />
                         </div>
                         <div class="error-message text-red text-sm mt-1"></div>
+                        <div class="auth-hint mt-2">Optional - you can always login with an OTP, and set a password later from your profile.</div>
                         <div id="passwordCriteria" class="flex flex-wrap gap-2" style="display: none;">
                             <h2 class="w-full">Password Must Contain:</h2>
                             <label><span id="minLengthIcon" class=""></span> <span class="checkbox-label" id="minLengthLabel">At least 6 characters</span></label><br>
@@ -56,15 +54,6 @@ include('includes/header.php');
                             <label><span id="digitIcon" class=""></span> <span class="checkbox-label" id="digitLabel">One number</span></label><br>
                             <label><span id="specialCharIcon" class=""></span> <span class="checkbox-label" id="specialCharLabel">One special character (e.g., @, $, !, %, *, ?, &)</span></label>
                         </div>
-
-                    </div>
-                    <div class="confirm-pass mt-5">
-                        <div class="relative text-right">
-
-                            <a href="javascript: void(0);" class="text-black hover:underline pl-1" onclick="showPassword('confirmPassword', 'confirmEye')"><i class="ph ph-eye password-eye-btn relative text-black hover:underline" id="confirmEye"></i>Show</a>
-                            <input class="border-line px-4 pt-3 pb-3 w-full rounded-lg" id="confirmPassword" name="confirm-password" type="password" placeholder="Confirm Password *" />
-                        </div>
-                        <div class="error-message text-red text-sm mt-1"></div>
                     </div>
                     <div class="flex items-center mt-5">
                         <label for="remember" class="block-input">
@@ -75,8 +64,9 @@ include('includes/header.php');
                             <a href="#!" class="text-black hover:underline pl-1">Terms of User</a>
                         </label>
                     </div>
+                    <?php include('includes/auth-otp.php'); ?>
                     <div class="block-button md:mt-7 mt-4">
-                        <button class="button-main" id="regiserButton">Register</button>
+                        <button class="button-main" id="regiserButton">Get OTP</button>
                     </div>
                 </form>
             </div>

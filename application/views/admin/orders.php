@@ -107,6 +107,11 @@ $status = $this->input->get('status');
                 <div class="col-12">
                     <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                         <h2 class="mb-sm-0 "><?= $title ?></h2>
+                        <?php if (@PREV['orders_manual_create'] == 1 || USER_TYPE == '1') { ?>
+                            <a href="<?= base_url('addOrder') ?>" class="btn btn-success">
+                                <i class="bx bx-plus align-middle"></i> New Order
+                            </a>
+                        <?php } ?>
                     </div>
                 </div>
             </div>
@@ -233,6 +238,14 @@ $status = $this->input->get('status');
                         <button type="button" class="btn btn-outline-secondary btn-sm" data-range="month">This Month</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm" data-range="clear">Clear</button>
                     </div>
+                </div>
+                <div class="col-lg-2 mb-3">
+                    <label>Customer Mobile</label>
+                    <input type="text" class="form-control" id="searchByMobile" placeholder="Mobile number">
+                </div>
+                <div class="col-lg-2 mb-3">
+                    <label>Customer Email</label>
+                    <input type="text" class="form-control" id="searchByEmail" placeholder="Email address">
                 </div>
             </div>
             <div class="row">
@@ -665,6 +678,8 @@ $status = $this->input->get('status');
                 data.searchByDateFrom = $('#searchByDateFrom').val();
                 data.searchByDateTo = $('#searchByDateTo').val();
                 data.searchByStatus = $('#searchByStatus').val();
+                data.searchByMobile = $('#searchByMobile').val();
+                data.searchByEmail = $('#searchByEmail').val();
             }
         },
         <?php if (isset($col_stop)) { ?> "aoColumnDefs": [{
@@ -768,6 +783,12 @@ $status = $this->input->get('status');
 
     $('#searchByStatus').change(function() {
         dataTable.draw();
+    });
+
+    let customerFilterTimer;
+    $('#searchByMobile, #searchByEmail').on('keyup', function() {
+        clearTimeout(customerFilterTimer);
+        customerFilterTimer = setTimeout(() => dataTable.draw(), 400);
     });
 
     $(document).on('click', '.sync_payment', function() {

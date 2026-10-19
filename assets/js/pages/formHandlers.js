@@ -21,7 +21,7 @@ export async function submitForm(e, action, panel = "web") {
 		.then((data) => {
 			if (data.success === false) {
 				if (data.validation === false) {
-					showErrors(data.message);
+					showErrors(data.message, e.target);
 					return false; // Return false for validation errors
 				} else {
 					if (panel === "web") {
@@ -54,17 +54,20 @@ export async function submitForm(e, action, panel = "web") {
 }
 
 // === Show error message below relevent input field ===
-export function showErrors(messages) {
+// `scope` keeps a message inside the form it belongs to when a page holds
+// several forms with a field of the same name.
+export function showErrors(messages, scope = document) {
 	for (const [key, message] of Object.entries(messages)) {
-		let errorElement = document.querySelector(
+		let errorElement = scope.querySelector(
 			`[name="${key}"] + .error-message`
 		);
 
 		if (!errorElement) {
+			const inputElement = scope.querySelector(`[name="${key}"]`);
+			if (!inputElement) continue;
+
 			errorElement = document.createElement("div");
 			errorElement.className = "error-message text-red text-sm mt-1";
-
-			const inputElement = document.querySelector(`[name="${key}"]`);
 			inputElement.parentNode.insertBefore(
 				errorElement,
 				inputElement.nextSibling

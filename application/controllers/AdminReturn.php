@@ -117,7 +117,7 @@ class AdminReturn extends CI_Controller
 		) ?: [];
 
 		$data['customer_frequency'] = $this->CommonModel->runQuery(
-			"SELECT tbl_return_request.user_id, tbl_user_registration.name, tbl_user_registration.contact_no, COUNT(*) AS cnt
+			"SELECT tbl_return_request.user_id, tbl_user_registration.name, tbl_user_registration.contact_no, tbl_user_registration.email_id, COUNT(*) AS cnt
 			FROM tbl_return_request
 			LEFT JOIN tbl_user_registration ON tbl_user_registration.user_id = tbl_return_request.user_id
 			GROUP BY tbl_return_request.user_id
@@ -129,13 +129,30 @@ class AdminReturn extends CI_Controller
 		$this->load->view('admin/return/reports', $data);
 	}
 
+	// Plain columns only - a function call (COALESCE etc.) here would stop
+	// CodeIgniter adding the tbl_ prefix. returnCustomerContact() picks
+	// between the account's and the order's value.
+	const RETURN_LIST_SELECT = "return_request.*, book_product.order_id, book_product.payment_mode, book_item.product_name, user_registration.name AS customer_name, user_registration.contact_no, user_registration.email_id, book_product.contact_no AS order_contact_no, book_product.email AS order_email";
+
+	// Customer mobile/email for a return row: the account's, falling back to
+	// what was given on the order when the account has none (an OTP sign-up
+	// has only one of the two).
+	private function returnCustomerContact($row)
+	{
+		return [
+			'contact_no' => $row['contact_no'] ?: $row['order_contact_no'],
+			'email_id' => $row['email_id'] ?: $row['order_email'],
+		];
+	}
+
 	// Shared filter-building logic for both the DataTables listing and the CSV
 	// export, so the two can never drift out of sync on what "filtered" means.
 	private function buildReturnSearchQuery($filters)
 	{
 		$searchQuery = "";
 		if (!empty($filters['search'])) {
-			$searchQuery .= " AND (book_product.order_id LIKE '%" . $this->db->escape_like_str($filters['search']) . "%' OR user_registration.name LIKE '%" . $this->db->escape_like_str($filters['search']) . "%' OR return_request.return_code LIKE '%" . $this->db->escape_like_str($filters['search']) . "%')";
+			$searchLike = " LIKE '%" . $this->db->escape_like_str($filters['search']) . "%'";
+			$searchQuery .= " AND (book_product.order_id" . $searchLike . " OR user_registration.name" . $searchLike . " OR return_request.return_code" . $searchLike . " OR user_registration.contact_no" . $searchLike . " OR user_registration.email_id" . $searchLike . " OR book_product.contact_no" . $searchLike . " OR book_product.email" . $searchLike . ")";
 		}
 
 		$dateFrom = $filters['date_from'] ?? '';
@@ -151,7 +168,10 @@ class AdminReturn extends CI_Controller
 		$searchQuery .= !empty($filters['reason']) ? " AND (return_request.reason = '" . $this->db->escape_str($filters['reason']) . "')" : "";
 		$searchQuery .= !empty($filters['payment_mode']) ? " AND (book_product.payment_mode = '" . $this->db->escape_str($filters['payment_mode']) . "')" : "";
 		$searchQuery .= !empty($filters['order_id']) ? " AND (book_product.order_id LIKE '%" . $this->db->escape_like_str($filters['order_id']) . "%')" : "";
-		$searchQuery .= !empty($filters['mobile']) ? " AND (user_registration.contact_no LIKE '%" . $this->db->escape_like_str($filters['mobile']) . "%')" : "";
+		// The account's value or the one given on the order: an account may
+		// have only a mobile or only an email, the order carries both.
+		$searchQuery .= customerContactFilterSql($filters['mobile'] ?? '', ['user_registration.contact_no', 'book_product.contact_no'], true);
+		$searchQuery .= customerContactFilterSql($filters['email'] ?? '', ['user_registration.email_id', 'book_product.email']);
 
 		return $searchQuery;
 	}
@@ -170,9 +190,10 @@ class AdminReturn extends CI_Controller
 				'payment_mode' => $this->input->post('searchByPaymentMode'),
 				'order_id' => $this->input->post('searchByOrderId'),
 				'mobile' => $this->input->post('searchByMobile'),
+				'email' => $this->input->post('searchByEmail'),
 			]);
 
-			$select = "return_request.*, book_product.order_id, book_product.payment_mode, book_item.product_name, user_registration.name AS customer_name, user_registration.contact_no";
+			$select = self::RETURN_LIST_SELECT;
 			$join = [
 				['book_product', 'book_product.product_book_id = return_request.product_book_id', 'LEFT'],
 				['book_item', 'book_item.book_item_id = return_request.book_item_id', 'LEFT'],
@@ -195,12 +216,13 @@ class AdminReturn extends CI_Controller
 					RETURN_STATUS_REJECTED => 'danger',
 				];
 				$status = statusView($statusColors[$record['status']] ?? 'secondary', getReturnStatusLabel($record['status']));
+				$contact = $this->returnCustomerContact($record);
 				$action = '<a href="' . base_url("returnDetails?id=$id") . '" class="btn btn-primary btn-sm"><i class="fa fa-eye"></i> View</a>';
 
 				$data[] = [
 					'return_code' => $record['return_code'],
 					'order_id' => $record['order_id'],
-					'customer_name' => $record['customer_name'] . '<br>' . $record['contact_no'],
+					'customer_name' => htmlspecialchars((string) $record['customer_name']) . '<br>' . htmlspecialchars(customerContactLabel($contact['contact_no'], $contact['email_id'], ' | ')),
 					'product_name' => $record['product_name'],
 					'quantity_return' => $record['quantity_return'],
 					'reason' => $record['reason'],
@@ -256,9 +278,10 @@ class AdminReturn extends CI_Controller
 			'payment_mode' => $this->input->get('searchByPaymentMode'),
 			'order_id' => $this->input->get('searchByOrderId'),
 			'mobile' => $this->input->get('searchByMobile'),
+			'email' => $this->input->get('searchByEmail'),
 		]);
 
-		$select = "return_request.*, book_product.order_id, book_product.payment_mode, book_item.product_name, user_registration.name AS customer_name, user_registration.contact_no";
+		$select = self::RETURN_LIST_SELECT;
 		$this->db->select($select)
 			->from('return_request')
 			->join('book_product', 'book_product.product_book_id = return_request.product_book_id', 'LEFT')
@@ -274,13 +297,15 @@ class AdminReturn extends CI_Controller
 		header('Content-Disposition: attachment; filename="' . $filename . '"');
 
 		$out = fopen('php://output', 'w');
-		fputcsv($out, ['Return ID', 'Order ID', 'Customer', 'Mobile', 'Product', 'Qty', 'Reason', 'Request Date', 'Status', 'Payment Method', 'Refund Method', 'Refund Amount', 'Refund Status']);
+		fputcsv($out, ['Return ID', 'Order ID', 'Customer', 'Mobile', 'Email', 'Product', 'Qty', 'Reason', 'Request Date', 'Status', 'Payment Method', 'Refund Method', 'Refund Amount', 'Refund Status']);
 		foreach ($rows as $row) {
+			$contact = $this->returnCustomerContact($row);
 			fputcsv($out, [
 				$row['return_code'],
 				$row['order_id'],
 				$row['customer_name'],
-				$row['contact_no'],
+				$contact['contact_no'],
+				$contact['email_id'],
 				$row['product_name'],
 				$row['quantity_return'],
 				$row['reason'],
@@ -334,7 +359,16 @@ class AdminReturn extends CI_Controller
 			return;
 		}
 
-		$this->CommonModel->updateRowByIdWithOutXss('return_request', "return_id = '$id'", ['admin_notes' => $adminNotes]);
+		// Claim the approval atomically - two admins (or a double click) on the
+		// same pending return must not both restock it.
+		$this->db->set('admin_notes', $adminNotes)
+			->where('return_id', $id)
+			->where_in('status', [RETURN_STATUS_REQUESTED, RETURN_STATUS_UNDER_REVIEW])
+			->update('return_request');
+		if ($this->db->affected_rows() < 1) {
+			echo json_encode(['status' => false, 'message' => 'This return has already been processed.']);
+			return;
+		}
 		logReturnStatus($id, RETURN_STATUS_APPROVED, $adminNotes, 1, sessionId('admin_id'));
 
 		// Restock only the returned quantity for this specific line, not the
@@ -354,6 +388,10 @@ class AdminReturn extends CI_Controller
 		}
 		$this->CommonModel->logAdminActivity(1, sessionId('admin_id'), 'return_approve', 'return', $id, null, ['admin_notes' => $adminNotes]);
 
+		// The partner isn't owed for returned units. Their line is reduced (or
+		// voided on a full return) unless it was already paid out.
+		$vendorAdjusted = $this->CommonModel->adjustVendorLineForReturn($returnRow['book_item_id'], $returnRow['quantity_return']);
+
 		$order = $this->CommonModel->getSingleRowById('book_product', ['product_book_id' => $returnRow['product_book_id']]);
 		if ($order) {
 			sendTemplatedMail('return_approved_user', $order['email'], [
@@ -370,6 +408,9 @@ class AdminReturn extends CI_Controller
 		}
 
 		$message = 'Return request approved.';
+		if (!$vendorAdjusted) {
+			$message .= ' The partner sale for this item was already in a payout - adjust with the partner manually.';
+		}
 		if ($this->input->post('create_pickup') == '1') {
 			$pickupResult = $this->attemptShiprocketPickup($id, $returnRow, $order);
 			$message .= ' ' . $pickupResult['message'];
@@ -608,6 +649,24 @@ class AdminReturn extends CI_Controller
 			return;
 		}
 
+		// Never more than the customer paid for the returned units: the line's
+		// price after its share of the order's coupon discount. Shipping and
+		// packaging aren't per-item, so they're not included.
+		$item = $this->CommonModel->getSingleRowById('book_item', ['book_item_id' => $returnRow['book_item_id']]);
+		$orderRow = $this->CommonModel->getSingleRowById('book_product', ['product_book_id' => $returnRow['product_book_id']]);
+		if ($item && $orderRow && (float) $item['no_of_items'] > 0) {
+			$lineValue = (float) $item['booking_price'];
+			$itemsTotal = (float) $orderRow['total_item_amount'];
+			if ($itemsTotal > 0 && (float) $orderRow['promocode_amount'] > 0) {
+				$lineValue -= (float) $orderRow['promocode_amount'] * ($lineValue / $itemsTotal);
+			}
+			$maxRefund = round($lineValue * ((float) $returnRow['quantity_return'] / (float) $item['no_of_items']), 2);
+			if ($refundAmount > $maxRefund + 0.01) {
+				echo json_encode(['status' => false, 'message' => 'Refund amount cannot exceed Rs. ' . number_format($maxRefund, 2) . ' (what the customer paid for the returned quantity).']);
+				return;
+			}
+		}
+
 		$update = [
 			'refund_method' => $refundMethod,
 			'refund_amount' => $refundAmount,
@@ -616,7 +675,16 @@ class AdminReturn extends CI_Controller
 			'refund_remark' => $remark !== '' ? $remark : null,
 			'refund_date' => $refundStatus === REFUND_STATUS_COMPLETED ? setDateTime() : null,
 		];
-		$this->CommonModel->updateRowByIdWithOutXss('return_request', "return_id = '$id'", $update);
+		// Conditional on the refund not being completed yet, so a double
+		// click can't credit the wallet twice.
+		$this->db->set($update)
+			->where('return_id', $id)
+			->group_start()->where('refund_status IS NULL', null, false)->or_where('refund_status !=', REFUND_STATUS_COMPLETED)->group_end()
+			->update('return_request');
+		if ($this->db->affected_rows() < 1) {
+			echo json_encode(['status' => false, 'message' => 'This return has already been refunded.']);
+			return;
+		}
 
 		$order = $this->CommonModel->getSingleRowById('book_product', ['product_book_id' => $returnRow['product_book_id']]);
 		$note = "Refund $refundMethod - " . getRefundStatusLabel($refundStatus) . ($transactionId ? " (txn: $transactionId)" : '') . ($remark ? " - $remark" : '');

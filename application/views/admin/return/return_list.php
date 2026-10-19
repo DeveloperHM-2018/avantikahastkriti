@@ -51,6 +51,10 @@
                     <label>Mobile</label>
                     <input type="text" class="form-control" id="searchByMobile" placeholder="Customer mobile">
                 </div>
+                <div class="col-lg-2 mb-3">
+                    <label>Email</label>
+                    <input type="text" class="form-control" id="searchByEmail" placeholder="Customer email">
+                </div>
                 <div class="col-lg-2 mb-3" id="datepicker2">
                     <label>From Date</label>
                     <input type="text" class="form-control" id="searchByDateFrom" readonly placeholder="dd-mm-yyyy" data-date-format="dd-mm-yyyy" data-date-container='#datepicker2' data-provide="datepicker" data-date-autoclose="true">
@@ -112,6 +116,7 @@
                 data.searchByPaymentMode = $('#searchByPaymentMode').val();
                 data.searchByOrderId = $('#searchByOrderId').val();
                 data.searchByMobile = $('#searchByMobile').val();
+                data.searchByEmail = $('#searchByEmail').val();
             }
         },
         <?php if (isset($col_stop)) { ?> "aoColumnDefs": [{
@@ -133,7 +138,7 @@
         clearTimeout(orderIdTimer);
         orderIdTimer = setTimeout(() => dataTable.draw(), 400);
     });
-    $('#searchByMobile').on('keyup', function() {
+    $('#searchByMobile, #searchByEmail').on('keyup', function() {
         clearTimeout(mobileTimer);
         mobileTimer = setTimeout(() => dataTable.draw(), 400);
     });
@@ -147,6 +152,7 @@
             searchByPaymentMode: $('#searchByPaymentMode').val(),
             searchByOrderId: $('#searchByOrderId').val(),
             searchByMobile: $('#searchByMobile').val(),
+            searchByEmail: $('#searchByEmail').val(),
         });
         window.location = "<?= base_url('returnsExportCsv') ?>?" + params.toString();
     });

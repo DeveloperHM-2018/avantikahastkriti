@@ -19,7 +19,6 @@ include('includes/header.php');
                 <div class="heading4">Reset Password</div>
                 <form class="md:mt-7 mt-4" id="reset-password-form" method="POST">
                     <div class="formMsg"></div>
-                    <input type="hidden" name="email" id="email" value="<?= sessionId('forgotContact') ?>">
                     <div class="pass mt-5 ">
                         <div class="relative text-right">
                             <a href="javascript: void(0);" class="text-black hover:underline pl-1" onclick="showPassword('password', 'loginEye')"><i class="ph ph-eye password-eye-btn relative text-black hover:underline" id="loginEye"></i>Show</a>

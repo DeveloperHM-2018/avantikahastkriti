@@ -22,13 +22,27 @@ $page = ACTIVE_PAGE;
 				<li class="menu-title">Sales & Orders</li>
 
 				<?php if (@PREV['orders_view'] == 1 || USER_TYPE == '1') { ?>
-					<li>
-						<a href="<?= base_url('allOrders') ?>" class="waves-effect">
-							<i class="bx bx-receipt"></i>
-							<span class="badge rounded-pill bg-danger float-end" id="neworder" style="display:none;"></span>
-							<span key="t-file-manager">Orders</span>
-						</a>
-					</li>
+					<?php if (@PREV['orders_manual_create'] == 1 || USER_TYPE == '1') { ?>
+						<li class=" <?= $page == "allOrders" || $page == "addOrder" ? 'mm-active' : '' ?>">
+							<a href="javascript: void(0);" class="has-arrow waves-effect">
+								<i class="bx bx-receipt"></i>
+								<span class="badge rounded-pill bg-danger float-end" id="neworder" style="display:none;"></span>
+								<span key="t-file-manager">Orders</span>
+							</a>
+							<ul class="sub-menu" aria-expanded="false">
+								<li><a href="<?= base_url('allOrders') ?>" class="<?= $page == "allOrders" ? 'active' : '' ?>">All Orders</a></li>
+								<li><a href="<?= base_url('addOrder') ?>" class="<?= $page == "addOrder" ? 'active' : '' ?>">New Order</a></li>
+							</ul>
+						</li>
+					<?php } else { ?>
+						<li>
+							<a href="<?= base_url('allOrders') ?>" class="waves-effect">
+								<i class="bx bx-receipt"></i>
+								<span class="badge rounded-pill bg-danger float-end" id="neworder" style="display:none;"></span>
+								<span key="t-file-manager">Orders</span>
+							</a>
+						</li>
+					<?php } ?>
 				<?php } ?>
 
 				<?php if (@PREV['return_view'] == 1 || USER_TYPE == '1') { ?>

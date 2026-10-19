@@ -227,6 +227,9 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
             'Login to your ' . $this->projectName . ' account to track orders, manage your wishlist and checkout faster.',
             'login, sign in, my account'
         );
+        $data['customStyles'] = [
+            'assets/css/pages/auth.css'
+        ];
         $data['customScripts'] = [
             'assets/js/pages/login.js' => 'module',
         ];
@@ -245,7 +248,8 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
             'register, sign up, create account'
         );
         $data['customStyles'] = [
-            'assets/css/pages/register.css'
+            'assets/css/pages/register.css',
+            'assets/css/pages/auth.css'
         ];
         $data['customScripts'] = [
             'assets/js/pages/register.js' => 'module',
@@ -282,12 +286,20 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
         $data['numOfActiveOrders'] = $this->CommonModel->getNumRows('book_product', "user_id = '{$userId}' AND booking_status IN ('0','1','3')");
         $data['numOfCancelledOrders'] = $this->CommonModel->getNumRows('book_product', ['user_id' => $userId, 'booking_status' => '2']);
         $data['profileData'] = $this->CommonModel->getSingleRowById('user_registration', ['user_id' => $userId]);
+        if (!$data['profileData'] || $data['profileData']['user_status'] != '1') {
+            // Account removed or blocked while this session was still open.
+            redirect('logout');
+        }
+        $data['hasPassword'] = userHasPassword($data['profileData']);
         $data['orders'] = $this->CommonModel->getRowByIdInOrder(
             'book_product',
             "user_id = '{$userId}' AND booking_date >= '{$fromDate} 00:00:00' AND booking_date <= '{$toDate} 23:59:59'",
             'product_book_id',
             'desc'
         );
+        $data['customStyles'] = [
+            'assets/css/pages/auth.css'
+        ];
         $data['customScripts'] = [
             'assets/js/pages/profile.js' => 'module',
         ];
@@ -308,6 +320,9 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
         userSession(false);
         $data['title'] = 'Forgot Password';
         $data['metaDescription'] = 'Reset the password for your ' . $this->projectName . ' account.';
+        $data['customStyles'] = [
+            'assets/css/pages/auth.css'
+        ];
         $data['customScripts'] = [
             'assets/js/pages/forgotPassword.js' => 'module',
         ];
@@ -315,7 +330,7 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
     }
     public function resetPassword()
     {
-        if (!sessionId('forgotContact')) {
+        if (!passwordResetUserId()) {
             redirect(base_url('forgot-password'));
         }
         $data['title'] = 'Reset Password';
@@ -520,49 +535,9 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
 
     public function place_order()
     {
-        // Look up or create the user_registration row this guest order should
-        // be attributed to, based on contact number/email during checkout.
-        // This must NOT log the browser session in as that account - doing so
-        // previously let anyone type in an existing customer's phone number
-        // and be granted access to that customer's account (profile, saved
-        // addresses, full order history) with no password check at all.
-        $userId = sessionId('login_user_id');
-        if (!$userId) {
-            $number = $this->input->post('number');
-            if(empty($number)) {
-                echo json_encode(['success' => false, 'message' => 'Please provide a Mobile Number to proceed with checkout.']);
-                return false;
-            }
-
-            // Look for user with this number
-            $user = $this->CommonModel->getSingleRowById('user_registration', ['contact_no' => $number]);
-
-            $email = $this->input->post('email') ? $this->input->post('email') : '';
-            if (!$user && !empty($email)) {
-                // Look for user with this email
-                $user = $this->CommonModel->getSingleRowById('user_registration', ['email_id' => $email]);
-            }
-
-            if ($user) {
-                $userId = $user['user_id'];
-            } else {
-                // Register a new user with dummy password 123456
-                $name = $this->input->post('name') ? $this->input->post('name') : 'User';
-
-                $formData = array(
-                    'name' => $name,
-                    'email_id' => $email,
-                    'contact_no' => $number,
-                    'password' => password_hash('123456', PASSWORD_DEFAULT),
-                );
-                $insertData = $this->CommonModel->insertRowReturnId('user_registration', $formData);
-                if ($insertData) {
-                    $userId = $insertData;
-                } else {
-                    echo json_encode(['success' => false, 'message' => 'Failed to register new user for checkout.']);
-                    return false;
-                }
-            }
+        if (!sessionId('login_user_id') && empty($this->input->post('number'))) {
+            echo json_encode(['success' => false, 'message' => 'Please provide a Mobile Number to proceed with checkout.']);
+            return false;
         }
 
         // Validate the input data
@@ -582,6 +557,45 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
             // Validation failed
             echo json_encode(['success' => false, 'validation' => false, 'message' => $this->form_validation->error_array()]);
             return;
+        }
+
+        // Look up or create the user_registration row this guest order should
+        // be attributed to, based on contact number/email during checkout -
+        // only after validation, so a malformed number doesn't leave an
+        // account behind. This must NOT log the browser session in as that
+        // account - doing so previously let anyone type in an existing
+        // customer's phone number and be granted access to that customer's
+        // account (profile, saved addresses, full order history) with no
+        // password check at all.
+        $userId = sessionId('login_user_id');
+        if (!$userId) {
+            $number = $this->input->post('number');
+            $user = $this->CommonModel->getSingleRowById('user_registration', ['contact_no' => $number]);
+
+            $email = $this->input->post('email') ? $this->input->post('email') : '';
+            if (!$user && !empty($email)) {
+                $user = $this->CommonModel->getSingleRowById('user_registration', ['email_id' => $email]);
+            }
+
+            if ($user) {
+                $userId = $user['user_id'];
+            } else {
+                // Register an account for this number. It gets no password (the
+                // owner signs in by OTP and can set one later) and not the
+                // email typed here: nothing at checkout proves that address is
+                // theirs, and an email on an account is a way to log in to it.
+                // The email still goes on the order itself.
+                $insertData = $this->CommonModel->insertRowReturnId('user_registration', [
+                    'name' => $this->input->post('name') ?: 'User',
+                    'contact_no' => $number,
+                ]);
+                if ($insertData) {
+                    $userId = $insertData;
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Failed to register new user for checkout.']);
+                    return false;
+                }
+            }
         }
 
         // Collect form data
@@ -642,6 +656,12 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
                 $productDetails = $this->CommonModel->getSingleRowById('product', ['product_id' => $productId]);
 
                 if ($productDetails) {
+                    // is_delete = '1' is the live catalog (see Test::products());
+                    // a discontinued product can still sit in a saved cart.
+                    if ($productDetails['is_delete'] != '1') {
+                        echo json_encode(['success' => false, 'message' => $productDetails['product_name'] . ' is no longer available. Please remove it from your cart.']);
+                        return;
+                    }
                     if ($productDetails['is_out_of_stock'] == 1) {
                         echo json_encode(['success' => false, 'message' => $productDetails['product_name'] . ' is currently out of stock.']);
                         return;
@@ -676,8 +696,11 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
                             return;
                         }
                     } else {
-                        // Check product stock if no variant
-                        if ($productDetails['max_quantity'] < $quantity) {
+                        // Live stock is `quantity` - the column every order,
+                        // cancel and stock adjustment moves (CommonModel::
+                        // applyStockDecrement()). This used to read
+                        // max_quantity, which nothing keeps in step with sales.
+                        if ((float) $productDetails['quantity'] < $quantity) {
                             echo json_encode(['success' => false, 'message' => 'Insufficient stock for product: ' . $productDetails['product_name']]);
                             return;
                         }
@@ -789,8 +812,12 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
             'delivery_possible' => '1', // pan-India delivery - the pincode/map deliverability gate has been removed
         ];
 
-        // Insert order data into the database
+        // Insert order data into the database. The order, its lines and (for
+        // COD) the stock reservation commit together - a failure part-way no
+        // longer leaves an order without lines, or a rejected COD order
+        // behind as a "cancelled" row.
         try {
+            $this->db->trans_begin();
             $checkoutId = $this->CommonModel->insertRowReturnId('book_product', $orderData);
 
             if ($checkoutId) {
@@ -800,6 +827,38 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
                     $this->CommonModel->insertRow('book_item', $orderProduct);
                 }
 
+                if ($formData['payment_method'] != '0') {
+                    // COD is confirmed instantly (no payment gateway round-trip),
+                    // so stock must be reserved right now, atomically - unlike the
+                    // online branch, nothing has been charged yet, so on
+                    // insufficient stock (a race lost against another order since
+                    // the soft pre-check above) the order is rejected outright
+                    // rather than pinned for review.
+                    $stockResult = $this->CommonModel->decrementOrderStock($checkoutId, false, 'order_decrement', 0, null);
+                    if (!$stockResult['success']) {
+                        $this->db->trans_rollback();
+                        echo json_encode(['success' => false, 'message' => 'Insufficient stock for product: ' . $stockResult['product_name'] . '. Please update your cart.']);
+                        return;
+                    }
+                    $this->CommonModel->updateRowById('book_product', 'product_book_id', $checkoutId, ['transaction_status' => '1']);
+                }
+            }
+
+            if (!$checkoutId || $this->db->trans_status() === false) {
+                $this->db->trans_rollback();
+                echo json_encode(['success' => false, 'message' => 'Failed to place order']);
+                return;
+            }
+            $this->db->trans_commit();
+
+            // The thank-you page shows the customer's name, phone and address,
+            // so it is only served for orders this browser placed (or the
+            // logged-in owner's) - see thankyou().
+            $placedOrders = (array) $this->session->userdata('placed_order_ids');
+            $placedOrders[] = $orderId;
+            $this->session->set_userdata('placed_order_ids', array_slice($placedOrders, -10));
+
+            if ($checkoutId) {
                 // Update user's first_order status
                 if ($userDetails['first_order'] == 1) {
                     $this->CommonModel->updateRowById('user_registration', 'user_id', $userId, ['first_order' => 0]);
@@ -837,7 +896,11 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
                     );
 
                     if (!$razorpayOrder['success']) {
-                        echo json_encode(['success' => false, 'message' => $razorpayOrder['message']]);
+                        // No payment can ever arrive for this order - mark it
+                        // failed so it doesn't sit in the admin queue as a new
+                        // unpaid order. The gateway's error text stays in the log.
+                        $this->CommonModel->updateRowById('book_product', 'product_book_id', $checkoutId, ['transaction_status' => '2']);
+                        echo json_encode(['success' => false, 'message' => 'We could not start the online payment. Please try again, or choose Cash on Delivery.']);
                         return;
                     }
                     $saveRazorPayId = $this->CommonModel->updateRowById('book_product', 'product_book_id', $checkoutId, ['razorpay_order_id' => $razorpayOrder['order_id']]);
@@ -856,24 +919,7 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
                         'st_razorpay_api_key' => RAZOR_PYA_KEY
                     ]);
                 } else {
-                    // COD is confirmed instantly (no payment gateway round-trip),
-                    // so stock must be reserved right now, atomically - unlike the
-                    // online branch above, nothing has been charged yet, so on
-                    // insufficient stock (a race lost against another order since
-                    // the soft pre-check above) the order is rejected outright
-                    // rather than pinned for review.
-                    $stockResult = $this->CommonModel->decrementOrderStock($checkoutId, false, 'order_decrement', 0, null);
-                    if (!$stockResult['success']) {
-                        $this->CommonModel->updateRowById('book_product', 'product_book_id', $checkoutId, [
-                            'booking_status' => 2,
-                            'cancel_message' => 'Insufficient stock for ' . $stockResult['product_name'],
-                            'cancel_date' => date('Y-m-d H:i:s'),
-                        ]);
-                        echo json_encode(['success' => false, 'message' => 'Insufficient stock for product: ' . $stockResult['product_name'] . '. Please update your cart.']);
-                        return;
-                    }
-
-                    $saveOrder = $this->CommonModel->updateRowById('book_product', 'product_book_id', $checkoutId, ['transaction_status' => '1']);
+                    // Stock was reserved inside the transaction above.
 
                     // Sync to Shiprocket (COD) - Removed for manual sync
                     // $this->sync_to_shiprocket($checkoutId); // Removed as per instruction
@@ -886,8 +932,11 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
                 echo json_encode(['success' => false, 'message' => 'Failed to place order']);
             }
         } catch (Exception $e) {
+            $this->db->trans_rollback(); // no-op if the transaction already ended
+            // The exception text (SQL errors, gateway responses) stays in the
+            // log - it used to be appended to the customer-facing message.
             log_message('error', 'Error placing order: ' . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => 'An error occurred while placing the order. Please try again later.' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => 'An error occurred while placing the order. Please try again later.']);
         }
         return;
     }
@@ -1315,9 +1364,14 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
 
         $promotions = [];
 
-        $activeCodes = $this->CommonModel->getRowByIdInOrder('promocode', "expiry_date >= '" . date('Y-m-d') . "'", 'create_date', 'DESC');
+        // Same eligibility as the on-page checkout (evaluateCoupon()): only
+        // order coupons (type '1', not wallet-recharge ones), never on top of
+        // a coupon already applied to the order total, once per customer.
+        $activeCodes = ($order && !$order['promocode_status'])
+            ? $this->CommonModel->getRowByIdInOrder('promocode', "expiry_date >= '" . date('Y-m-d') . "' AND type = '1'", 'create_date', 'DESC')
+            : [];
         foreach (($activeCodes ?: []) as $promo) {
-            if ($subtotal >= (float) $promo['minimum_order']) {
+            if ($subtotal >= (float) $promo['minimum_order'] && !$this->couponUsedBy($promo['promocode'], $order['user_id'])) {
                 $isPercentage = (@$promo['discount_type'] === 'percentage');
                 $description = $isPercentage
                     ? $promo['amount'] . '% off'
@@ -1355,9 +1409,17 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
         }
         $subtotal = (float) $order['total_item_amount'];
 
-        $promo = $this->CommonModel->getSingleRowById('promocode', "promocode = '" . $this->db->escape_str($code) . "' AND expiry_date >= '" . date('Y-m-d') . "'");
+        if ($order['promocode_status']) {
+            echo json_encode(['error' => ['code' => 'INVALID_PROMOTION', 'description' => 'A coupon is already applied to this order.']]);
+            return;
+        }
+        $promo = $this->CommonModel->getSingleRowById('promocode', "promocode = '" . $this->db->escape_str($code) . "' AND expiry_date >= '" . date('Y-m-d') . "' AND type = '1'");
         if (!$promo) {
             echo json_encode(['error' => ['code' => 'INVALID_PROMOTION', 'description' => 'The specified promotion code is not recognised or does not exist.']]);
+            return;
+        }
+        if ($this->couponUsedBy($promo['promocode'], $order['user_id'])) {
+            echo json_encode(['error' => ['code' => 'REQUIREMENT_NOT_MET', 'description' => 'This coupon has already been used on a previous order.']]);
             return;
         }
         if ($subtotal < (float) $promo['minimum_order']) {
@@ -1411,7 +1473,9 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
         ];
 
         try {
-            $this->CommonModel->updateRowByMoreId('checkouts', ['id' => $orderId], $updateData);
+            // Legacy tbl_checkouts flow (no longer linked from the UI) - still
+            // scoped to the caller, so nobody can cancel another customer's row.
+            $this->CommonModel->updateRowByMoreId('checkouts', ['id' => $orderId, 'user_id' => sessionId('login_user_id')], $updateData);
             echo json_encode(['success' => true, 'message' => 'Order cancelled successfully']);
         } catch (Exception $e) {
             log_message('error', 'Error cancelling order: ' . $e->getMessage());
@@ -1426,8 +1490,17 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
         $order = null;
 
         if ($checkoutId) {
-            // Fetch order details from the database
-            $data['orderData'] = $orderData = $this->CommonModel->getSingleRowById('book_product', ['order_id' => $checkoutId]);
+            // Fetch order details from the database. The page shows the
+            // customer's name, phone and address, so it is only served to the
+            // browser that placed the order or to the account that owns it -
+            // order numbers appear in emails/WhatsApp and were guessable.
+            $orderData = $this->CommonModel->getSingleRowById('book_product', ['order_id' => $checkoutId]);
+            $placedHere = in_array($checkoutId, (array) $this->session->userdata('placed_order_ids'), true);
+            $ownsOrder = $orderData && sessionId('login_user_id') && $orderData['user_id'] == sessionId('login_user_id');
+            if (!$placedHere && !$ownsOrder) {
+                $orderData = null;
+            }
+            $data['orderData'] = $orderData;
             if ($orderData) {
                 $data['orderProducts'] = $orderProducts = $this->CommonModel->getRowById('book_item', 'product_book_id', $orderData['product_book_id']);
                 $order = [
@@ -1538,17 +1611,8 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
             return ['valid' => false, 'message' => 'Minimum order of ₹' . number_format($minimumOrder, 2) . ' required for this coupon.'];
         }
 
-        if ($userId) {
-            // Scoped to the current user - each customer may use a given
-            // coupon once, not the whole customer base combined.
-            $alreadyUsed = $this->CommonModel->getNumRows('book_product', [
-                'promocode' => $promo['promocode'],
-                'transaction_status' => '1',
-                'user_id' => $userId,
-            ]);
-            if ($alreadyUsed > 0) {
-                return ['valid' => false, 'message' => 'This coupon has already been used on a previous order.'];
-            }
+        if ($this->couponUsedBy($promo['promocode'], $userId)) {
+            return ['valid' => false, 'message' => 'This coupon has already been used on a previous order.'];
         }
 
         $discount = $this->calculateCouponDiscount($promo, $subtotal);
@@ -1565,6 +1629,20 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
             'code' => $promo['promocode'],
             'discount' => round($discount, 2),
         ];
+    }
+
+    // Scoped to one customer - each customer may use a given coupon once,
+    // not the whole customer base combined.
+    private function couponUsedBy($code, $userId)
+    {
+        if (!$userId) {
+            return false;
+        }
+        return $this->CommonModel->getNumRows('book_product', [
+            'promocode' => $code,
+            'transaction_status' => '1',
+            'user_id' => $userId,
+        ]) > 0;
     }
 
     public function applyPromo()
@@ -1720,11 +1798,17 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
         $this->load->view('searchData', $data);
     }
 
+    // Name only. Mobile number and email are login credentials, so they
+    // change through Auth::updateContact(), which verifies the new one by OTP.
     public function profile_update()
     {
-        $this->form_validation->set_rules('name', 'Name', 'required');
-        $this->form_validation->set_rules('email', 'Email', 'required|valid_email');
-        $this->form_validation->set_rules('number', 'Number', 'required|numeric|max_length[10]|callback_check_unique_mobile', ['max_length' => 'The Number field cannot exceed 10 digits in length.']);
+        $userId = sessionId('login_user_id');
+        if (!$userId) {
+            echo json_encode(['success' => false, 'message' => 'Please login to update your profile.']);
+            exit();
+        }
+
+        $this->form_validation->set_rules('name', 'Name', 'trim|required|max_length[100]');
 
         // Run validation
         if ($this->form_validation->run() == FALSE) {
@@ -1733,47 +1817,9 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
             exit();
         }
 
-        $formData = array(
-            'name' => $this->input->post('name'),
-            'email_id' => $this->input->post('email'),
-            'contact_no' => $this->input->post('number'),
-        );
-
-        $user = $this->CommonModel->updateRowById('user_registration', 'user_id', sessionId('login_user_id'), $formData);
-
-        if ($user) {
-            echo json_encode(['success' => true, 'message' => 'Profile details updated successfully.']);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Profile details already up to date.']);
-        }
+        $this->CommonModel->updateRowById('user_registration', 'user_id', $userId, ['name' => trim($this->input->post('name'))]);
+        echo json_encode(['success' => true, 'message' => 'Profile details updated successfully.']);
         exit();
-    }
-
-    public function check_unique_mobile($mobile)
-    {
-        $user_id = sessionId('login_user_id');
-        $existingUser = $this->CommonModel->getRowByConditions(
-            'user_registration',
-            ['contact_no' => $mobile, 'user_id !=' => $user_id]
-        );
-
-        if ($existingUser) {
-            $this->form_validation->set_message(['check_unique_mobile' => 'The mobile number is already in use by another user.']);
-            return FALSE;
-        }
-        return TRUE;
-    }
-    public function testOtp()
-    {
-        $contact_no = 6265965711;
-        $otp = 1234;
-        $send = sendOTP($contact_no, $otp);
-        print_r($send);
-        if ($send) {
-            echo "OTP sent successfully";
-        } else {
-            echo "OTP not sent";
-        }
     }
 
     public function not_found()

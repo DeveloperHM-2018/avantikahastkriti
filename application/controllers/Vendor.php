@@ -21,6 +21,15 @@ class Vendor extends CI_Controller
 			redirect('vendor/login');
 			exit;
 		}
+		// Status is checked at login only, so a partner suspended or rejected
+		// while signed in kept full access until the session expired.
+		$vendor = $this->CommonModel->getSingleRowById('vendor', ['vendor_id' => sessionId('vendor_id')]);
+		if (!$vendor || $vendor['status'] != 1) {
+			$this->session->unset_userdata(['vendor_id', 'vendor_name']);
+			flashData('errors', 'Your partner account is not active. Please contact support.');
+			redirect('vendor/login');
+			exit;
+		}
 	}
 
 	public function register()
@@ -273,12 +282,13 @@ class Vendor extends CI_Controller
 		$data['total_products'] = $this->CommonModel->getNumRows('vendor_product', ['vendor_id' => $vendorId]);
 		$data['pending_products'] = $this->CommonModel->getNumRows('vendor_product', ['vendor_id' => $vendorId, 'status' => 0]);
 		$data['live_products'] = $this->CommonModel->getNumRows('vendor_product', ['vendor_id' => $vendorId, 'status' => 1]);
-		$data['total_orders'] = $this->CommonModel->getNumRows('vendor_order_item', ['vendor_id' => $vendorId]);
-		$data['pending_orders'] = $this->CommonModel->getNumRows('vendor_order_item', ['vendor_id' => $vendorId, 'payout_status' => 0]);
+		// Voided lines (order cancelled / item returned) are not sales.
+		$data['total_orders'] = $this->CommonModel->getNumRows('vendor_order_item', "vendor_id = " . (int) $vendorId . " AND payout_status != " . VENDOR_LINE_VOID);
+		$data['pending_orders'] = $this->CommonModel->getNumRows('vendor_order_item', ['vendor_id' => $vendorId, 'payout_status' => VENDOR_LINE_UNPAID]);
 
 		$salesRow = $this->CommonModel->runQuery(
 			"SELECT COALESCE(SUM(vendor_payable_amount), 0) AS payable, COALESCE(SUM(commission_amount + vendor_payable_amount), 0) AS gross
-			FROM tbl_vendor_order_item WHERE vendor_id = " . (int) $vendorId,
+			FROM tbl_vendor_order_item WHERE vendor_id = " . (int) $vendorId . " AND payout_status != " . VENDOR_LINE_VOID,
 			2
 		);
 		$data['total_sales'] = $salesRow ? (float) $salesRow['gross'] : 0;
@@ -561,8 +571,8 @@ class Vendor extends CI_Controller
 				['book_item', 'book_item.book_item_id = vendor_order_item.book_item_id', 'LEFT'],
 			];
 			$allData = $this->CommonModel->getAjaxDataWithJoin($select, 'vendor_order_item', $searchQuery, $postData, $join);
-			$payoutLabels = [0 => 'Unpaid', 1 => 'In Next Payout', 2 => 'Paid'];
-			$payoutColors = [0 => 'warning', 1 => 'info', 2 => 'success'];
+			$payoutLabels = [VENDOR_LINE_UNPAID => 'Unpaid', VENDOR_LINE_IN_BATCH => 'In Next Payout', VENDOR_LINE_PAID => 'Paid', VENDOR_LINE_VOID => 'Cancelled / Returned'];
+			$payoutColors = [VENDOR_LINE_UNPAID => 'warning', VENDOR_LINE_IN_BATCH => 'info', VENDOR_LINE_PAID => 'success', VENDOR_LINE_VOID => 'secondary'];
 
 			$data = [];
 			foreach ($allData['records'] as $record) {
@@ -631,6 +641,25 @@ class Vendor extends CI_Controller
 					flashData('errors', validation_errors());
 				}
 			} else {
+				// Bank details decide where payouts go - keep a record of every
+				// change (only masked account numbers, never the full number).
+				$before = $this->CommonModel->getSingleRowById('vendor', ['vendor_id' => $vendorId]);
+				$bankFields = ['bank_account_name', 'bank_account_no', 'bank_ifsc'];
+				$bankChanged = false;
+				foreach ($bankFields as $field) {
+					if ((string) $before[$field] !== (string) $this->input->post($field)) {
+						$bankChanged = true;
+					}
+				}
+				if ($bankChanged) {
+					$mask = function ($no) {
+						return $no ? str_repeat('*', max(0, strlen($no) - 4)) . substr($no, -4) : '';
+					};
+					$this->CommonModel->logAdminActivity(ACTOR_TYPE_VENDOR, $vendorId, 'vendor_bank_details_change', 'vendor', $vendorId,
+						['bank_account_name' => $before['bank_account_name'], 'bank_account_no' => $mask($before['bank_account_no']), 'bank_ifsc' => $before['bank_ifsc']],
+						['bank_account_name' => $this->input->post('bank_account_name'), 'bank_account_no' => $mask($this->input->post('bank_account_no')), 'bank_ifsc' => $this->input->post('bank_ifsc')]
+					);
+				}
 				$this->CommonModel->updateRowById('vendor', 'vendor_id', $vendorId, [
 					'contact_name' => $this->input->post('contact_name'),
 					'contact_no' => $this->input->post('contact_no'),

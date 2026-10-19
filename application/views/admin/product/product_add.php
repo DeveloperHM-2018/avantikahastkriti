@@ -94,7 +94,7 @@ if ($view_type) {
                                                     <?php
                                                     $sub_category_id = is_array($sub_category_id) ? $sub_category_id : [];
                                                     $subCate = getRowsByMoreIdWithOrder('sub_category', "category_id = '$category_id' AND is_delete = '1'", 'sub_category_name', 'ASC');
-                                                    foreach ($subCate as $c) {
+                                                    foreach ($subCate ?: [] as $c) {
                                                     ?>
                                                         <option value="<?= $c['sub_category_id'] ?>"
                                                             <?= in_array($c['sub_category_id'], $sub_category_id) ? 'selected' : '' ?>>
@@ -147,10 +147,21 @@ if ($view_type) {
                                     </div>
                                     <div class="col-lg-6 mb-3">
                                         <div class="row">
-                                            <label for="example-text-input" class="col-md-5 col-form-label">Stock Avilable in Unit <span class="text-danger">*</span></label>
-                                            <div class="col-md-7">
-                                                <input class="form-control" type="number" name="max_quantity" <?= $read_only ?> required value="<?= $max_quantity ? $max_quantity : 1 ?>" min="1">
-                                            </div>
+                                            <?php if (isset($id)) : ?>
+                                                <?php // Live stock changes only through Inventory > Adjust Stock (ledgered) - see AdminProduct::productAdd(). ?>
+                                                <label class="col-md-5 col-form-label">Stock Available in Unit</label>
+                                                <div class="col-md-7">
+                                                    <input class="form-control" type="number" value="<?= (float) $quantity ?>" readonly disabled>
+                                                    <?php if (!$view_type) : ?>
+                                                        <small><a href="<?= base_url('stockAdjust?id=' . $id) ?>">Adjust stock</a></small>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php else : ?>
+                                                <label for="example-text-input" class="col-md-5 col-form-label">Stock Available in Unit <span class="text-danger">*</span></label>
+                                                <div class="col-md-7">
+                                                    <input class="form-control" type="number" name="max_quantity" <?= $read_only ?> required value="<?= $max_quantity ? $max_quantity : 1 ?>" min="0">
+                                                </div>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                     <!--<div class="col-lg-6 mb-3">-->
@@ -181,7 +192,6 @@ if ($view_type) {
                                     <!--    <div class="row">-->
                                     <!--        <label for="example-text-input" class="col-md-5 col-form-label">Quantity <span class="text-danger">*</span></label>-->
                                     <!--        <div class="col-md-7">-->
-                                    <input class="form-control" type="hidden" name="quantity" <?= $read_only ?> required value="<?= $quantity ? $quantity : "1" ?>">
                                     <!--        </div>-->
                                     <!--    </div>-->
                                     <!--</div>-->

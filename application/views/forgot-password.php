@@ -25,16 +25,13 @@ include('includes/header.php');
         <div class="content-main flex gap-y-8 max-md:flex-col">
             <div class="left md:w-1/2 w-full lg:pr-[60px] md:pr-[40px] md:border-r border-line">
                 <div class="heading4">Forgot Password</div>
-                <form class="md:mt-7 mt-4" id="forgot-password-form" method="POST">
+                <div class="mt-2 text-secondary">Verify the mobile number or email on your account, then choose a new password.</div>
+                <form class="auth-form md:mt-7 mt-4" id="forgot-password-form" method="POST">
                     <div class="formMsg"></div>
-                    <div class="email">
-                        <input class="border-line px-4 pt-3 pb-3 w-full rounded-lg" id="email" name="email" type="email" placeholder="Email Address *" />
-                    </div>
-                    <div class="otpField">
-                        <!-- OTP field rendered from JavaScript -->
-                    </div>
+                    <?php include('includes/auth-identifier.php'); ?>
+                    <?php include('includes/auth-otp.php'); ?>
                     <div class="block-button md:mt-7 mt-4">
-                        <button class="button-main">Send OTP</button>
+                        <button class="button-main">Get OTP</button>
                     </div>
                     <div class="flex items-center justify-end mt-5">
                         <a href="<?= base_url('login') ?>" class="font-semibold hover:underline">Remember password? Login here </a>

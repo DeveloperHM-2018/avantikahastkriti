@@ -452,10 +452,22 @@ class AdminProduct extends CI_Controller
 			$post['product_type'] = $product_type;
 			$post['market_price'] = $market_price;
 			$post['sale_price'] = $sale_price;
-			$post['quantity'] = $quantity;
-			$post['max_quantity'] = $max_quantity;
+			// Live stock (`quantity`) is set here only for a new product. After
+			// that it moves only through orders, cancellations, returns and
+			// Inventory > Adjust Stock, which all write the stock ledger. The
+			// edit form used to post back a hidden copy of quantity, loaded
+			// when the form opened (and "1" when it was 0), so saving a product
+			// undid any sale made meanwhile and put sold-out items back on sale.
 			$post['quantity_type'] = $quantity_type;
 			$post['is_out_of_stock'] = $this->input->post('is_out_of_stock') ? 1 : 0;
+			if (!isset($id)) {
+				$openingStock = max(0, (int) $max_quantity);
+				$post['quantity'] = $openingStock;
+				$post['max_quantity'] = $openingStock;
+				if ($openingStock <= 0) {
+					$post['is_out_of_stock'] = 1;
+				}
+			}
 			$post['meta_title'] = trim(@$meta_title);
 			$post['meta_description'] = trim(@$meta_description);
 			$post['meta_keywords'] = trim(@$meta_keywords);
@@ -501,6 +513,12 @@ class AdminProduct extends CI_Controller
 			} else {
 				$p_id = $this->CommonModel->insertRowReturnIdWithClean('product', $post);
 				if ($p_id > 0) {
+					$this->CommonModel->recordInitialStockLedger($p_id, null, $post['quantity'], 'initial_stock', [
+						'reference_type' => 'product',
+						'reference_id' => $p_id,
+						'changed_by_type' => ACTOR_TYPE_ADMIN,
+						'changed_by_id' => sessionId('admin_id'),
+					]);
 
 					$filesCount = count($_FILES['image']['name']);
 					if ($filesCount > 0) {
@@ -1023,8 +1041,12 @@ class AdminProduct extends CI_Controller
 						'product_type' => $product_type,
 						'market_price' => $market_price ?: $sale_price,
 						'sale_price' => $sale_price,
-						'max_quantity' => $stock,
-						'quantity' => '1',
+						// The sheet's stock is the live stock - `quantity` used to be
+						// hard-coded to 1 here, so an imported product sold out after
+						// one sale whatever the sheet said.
+						'max_quantity' => max(0, (int) $stock),
+						'quantity' => max(0, (int) $stock),
+						'is_out_of_stock' => (int) $stock > 0 ? 0 : 1,
 						'quantity_type' => 'kg',
 						'description' => $description,
 					];
@@ -1040,6 +1062,12 @@ class AdminProduct extends CI_Controller
 						];
 						continue;
 					}
+					$this->CommonModel->recordInitialStockLedger($product_id, null, $product_post['quantity'], 'initial_stock', [
+						'reference_type' => 'product_import',
+						'reference_id' => $product_id,
+						'changed_by_type' => ACTOR_TYPE_ADMIN,
+						'changed_by_id' => sessionId('admin_id'),
+					]);
 
 					// Handle product image
 					$excel_row = $i + 1;
@@ -1197,7 +1225,7 @@ class AdminProduct extends CI_Controller
 	public function productReviews()
 	{
 		// Query reviews with product name and customer name
-		$select = "r.*, p.product_name, u.name as user_name, u.contact_no";
+		$select = "r.*, p.product_name, u.name as user_name, u.contact_no, u.email_id";
 		$join = [
 			['product p', 'r.product_id = p.product_id', 'LEFT'],
 			['user_registration u', 'r.user_id = u.user_id', 'LEFT']

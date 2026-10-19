@@ -320,14 +320,25 @@ function getUserId($token)
 	}
 }
 
+// Order numbers are shown to customers and used to look orders up, so they
+// must not be guessable from the time alone: the timestamp (24-hour clock)
+// gets a random 4-digit suffix. The old form, TXN + date('ydmhis'), used a
+// 12-hour clock, so it repeated twice a day and could be enumerated, and two
+// orders in the same second sent the recursive retry into a tight loop.
 function orderIdGenerateUser($table, $column)
 {
-	$number = "TXN" . date('ydmhis');
-	if (checkOrderIdExistUser($number, $table, $column)) {
-		return orderIdGenerateUser($table, $column);
-	} else {
-		return $number;
+	return uniqueTimestampCode('TXN', $table, $column);
+}
+
+function uniqueTimestampCode($prefix, $table, $column)
+{
+	for ($attempt = 0; $attempt < 20; $attempt++) {
+		$number = $prefix . date('ydmHis') . str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+		if (!checkOrderIdExistUser($number, $table, $column)) {
+			return $number;
+		}
 	}
+	throw new RuntimeException("Could not generate a unique $column for $table");
 }
 
 function checkOrderIdExistUser($number, $table, $column)
@@ -489,7 +500,11 @@ function fullImage($imageName, $path, $temp_image, $maxSizeBytes = 0)
 	}
 	$ci = &get_instance();
 	$config['file_name'] = uniqid();
-	$config['allowed_types'] = '*';
+	// Every caller stores an image under the public upload/ folder, keeping
+	// the uploader's file extension - with '*' a vendor, reviewer or app user
+	// could upload a .php file there and run it. CI checks both the extension
+	// and the sniffed MIME type against config/mimes.php.
+	$config['allowed_types'] = 'jpg|jpeg|png|webp|gif';
 	$config['upload_path'] = $path;
 	$target_path = $path;
 	$config['remove_spaces'] = true;
@@ -593,6 +608,11 @@ function whatsappTemplateSend($eventKey, $contactNo, $placeholders = [])
 	$templates = (array) $ci->config->item('whatsapp_templates');
 	$result = ['success' => false, 'skipped' => '', 'template' => '', 'to' => '', 'http_code' => null, 'request' => null, 'response' => '', 'curl_error' => ''];
 
+	if (notificationsSuppressed()) {
+		$result['skipped'] = 'Notifications are suppressed for local testing.';
+		return $result;
+	}
+
 	if (empty($templates[$eventKey])) {
 		$result['skipped'] = "No template is mapped to event '$eventKey' in config/whatsapp.php.";
 		return $result;
@@ -630,7 +650,7 @@ function whatsappTemplateSend($eventKey, $contactNo, $placeholders = [])
 		'type' => 'template',
 		'template' => [
 			'name' => $template['name'],
-			'language' => ['code' => $ci->config->item('whatsapp_language')],
+			'language' => ['code' => !empty($template['language']) ? $template['language'] : $ci->config->item('whatsapp_language')],
 			'components' => $components,
 		],
 	];
@@ -707,6 +727,9 @@ function sendTemplatedMail($eventKey, $toEmail, $placeholders = [])
 
 	if (empty($toEmail)) {
 		log_message('error', "sendTemplatedMail: no recipient email for event '$eventKey'");
+		return false;
+	}
+	if (notificationsSuppressed()) {
 		return false;
 	}
 
@@ -812,6 +835,108 @@ function userSession($has = true)
 	}
 }
 
+// A storefront account is reached by mobile number OR email. Turns whatever
+// the customer typed into its stored form (10-digit Indian mobile, lower-case
+// email) plus the user_registration column it lives in; false when it is neither.
+function parseLoginIdentifier($value)
+{
+	$value = trim((string) $value);
+	if (strpos($value, '@') !== false) {
+		if (strlen($value) > 200 || !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+			return false;
+		}
+		return ['type' => 'email', 'value' => strtolower($value), 'column' => 'email_id', 'label' => 'email address'];
+	}
+	if (!preg_match('/^[\d\s+()-]+$/', $value)) {
+		return false;
+	}
+	$digits = preg_replace('/\D+/', '', $value);
+	if (strlen($digits) == 12 && substr($digits, 0, 2) == '91') {
+		$digits = substr($digits, 2);
+	} elseif (strlen($digits) == 11 && $digits[0] == '0') {
+		$digits = substr($digits, 1);
+	}
+	if (!preg_match('/^[6-9]\d{9}$/', $digits)) {
+		return false;
+	}
+	return ['type' => 'mobile', 'value' => $digits, 'column' => 'contact_no', 'label' => 'mobile number'];
+}
+
+// "+91 ******3210" / "ha***@gmail.com" - for "OTP sent to ..." messages.
+function maskLoginIdentifier($identifier)
+{
+	if ($identifier['type'] == 'mobile') {
+		return '+91 ******' . substr($identifier['value'], -4);
+	}
+	list($local, $domain) = explode('@', $identifier['value'], 2);
+	return substr($local, 0, 2) . '***@' . $domain;
+}
+
+// Accounts created by OTP sign-up, the mobile app or guest checkout have no
+// password of their own. Older guest-checkout accounts were given the shared
+// dummy password "123456", which must never work as a real credential.
+function userHasPassword($user)
+{
+	return !empty($user['password']) && !password_verify('123456', $user['password']);
+}
+
+// Admin "customer mobile / email" filters. A customer may have only one of
+// the two, and what they typed on an order can differ from what is on their
+// account, so a filter matches the value in either place. $columns are the
+// places to look, e.g. ['book_product.contact_no', 'user_registration.contact_no'].
+// Returns an " AND (...)" fragment for the listing helpers' raw where string.
+function customerContactFilterSql($value, $columns, $isMobile = false)
+{
+	$value = trim((string) $value);
+	if ($isMobile) {
+		// "+91 98765 43210" and "9876543210" should find the same customer.
+		$value = preg_replace('/\D+/', '', $value);
+		if (strlen($value) == 12 && substr($value, 0, 2) == '91') {
+			$value = substr($value, 2);
+		}
+	}
+	if ($value === '') {
+		return '';
+	}
+	$ci = &get_instance();
+	$like = " LIKE '%" . $ci->db->escape_like_str($value) . "%'";
+	return ' AND (' . implode($like . ' OR ', $columns) . $like . ')';
+}
+
+// "9876543210 / a@b.com", either one alone, or a dash - for admin listings.
+function customerContactLabel($contactNo, $email, $separator = ' / ')
+{
+	$parts = array_filter([trim((string) $contactNo), trim((string) $email)], 'strlen');
+	return $parts ? implode($separator, $parts) : '-';
+}
+
+// The account an OTP-verified password reset is in progress for, while the
+// short window opened by Auth::forgotPassword() is still open.
+function passwordResetUserId()
+{
+	$ci = &get_instance();
+	$userId = $ci->session->userdata('reset_user_id');
+	return $userId && $ci->session->userdata('reset_expires') >= time() ? $userId : false;
+}
+
+// Fixed-OTP shortcut for a developer machine, where no WhatsApp/SMTP gateway
+// is needed to test. OTP_ENABLE alone is decided by the Host header, which a
+// client controls, so the request must also come from this machine itself.
+function otpDevMode()
+{
+	$remote = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+	return !OTP_ENABLE && in_array($remote, ['127.0.0.1', '::1'], true);
+}
+
+// Lets automated tests on a developer machine drive real order/payment flows
+// without WhatsApp/email going to real customers or the admin number: only
+// honoured for loopback requests, and only while the flag file exists.
+function notificationsSuppressed()
+{
+	$remote = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+	return in_array($remote, ['127.0.0.1', '::1'], true) && file_exists(APPPATH . 'cache/suppress_notifications');
+}
+
 function generateOrderId($id)
 {
 	return '#ATP' . str_pad($id, 4, '0', STR_PAD_LEFT);
@@ -821,11 +946,7 @@ function generateOrderId($id)
 
 function returnCodeGenerate()
 {
-	$number = 'RET' . date('ydmhis');
-	if (checkOrderIdExistUser($number, 'return_request', 'return_code')) {
-		return returnCodeGenerate();
-	}
-	return $number;
+	return uniqueTimestampCode('RET', 'return_request', 'return_code');
 }
 
 function getReturnWindowDays()

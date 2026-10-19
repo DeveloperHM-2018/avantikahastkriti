@@ -135,6 +135,12 @@ defined('ORDER_SOURCE_MAGIC_CHECKOUT') or define('ORDER_SOURCE_MAGIC_CHECKOUT', 
 defined('ORDER_SOURCE_ADMIN_MANUAL')   or define('ORDER_SOURCE_ADMIN_MANUAL', 3);
 
 // Stock ledger actor type (tbl_stock_ledger.changed_by_type, tbl_admin_activity_log.actor_type)
+// tbl_vendor_order_item.payout_status
+defined('VENDOR_LINE_UNPAID')   or define('VENDOR_LINE_UNPAID', 0);
+defined('VENDOR_LINE_IN_BATCH') or define('VENDOR_LINE_IN_BATCH', 1); // in a payout not yet marked paid
+defined('VENDOR_LINE_PAID')     or define('VENDOR_LINE_PAID', 2);
+defined('VENDOR_LINE_VOID')     or define('VENDOR_LINE_VOID', 3);     // order cancelled / item returned before payout
+
 defined('ACTOR_TYPE_SYSTEM') or define('ACTOR_TYPE_SYSTEM', 0);
 defined('ACTOR_TYPE_ADMIN')  or define('ACTOR_TYPE_ADMIN', 1);
 defined('ACTOR_TYPE_VENDOR') or define('ACTOR_TYPE_VENDOR', 2);

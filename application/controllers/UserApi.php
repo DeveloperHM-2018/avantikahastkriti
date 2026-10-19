@@ -738,7 +738,8 @@ class UserApi extends REST_Controller
                             $stockError = 'Invalid quantity for ' . $product['product_name'] . '.';
                             break;
                         }
-                        if ($product['max_quantity'] < $qty) {
+                        // Live stock - see Web::place_order().
+                        if ((float) $product['quantity'] < $qty) {
                             $stockError = 'Insufficient stock for ' . $product['product_name'] . '.';
                             break;
                         }
@@ -825,6 +826,12 @@ class UserApi extends REST_Controller
                         $post['promocode'] = $promocode;
                     }
                     $post['booking_date'] = setDateOnly();
+                    $post['order_source'] = ORDER_SOURCE_MOBILE_APP;
+                    $isCod = strtoupper($payment_mode) === 'COD';
+
+                    // Order, lines, stock and wallet debit commit together (see
+                    // Web::place_order()).
+                    $this->db->trans_begin();
                     $product_book_id = $this->CommonModel->insertRowReturnId('book_product', $post);
                     if ($product_book_id) {
                         foreach ($items as &$item) {
@@ -839,23 +846,34 @@ class UserApi extends REST_Controller
                         // Nothing has been charged yet, so insufficient stock (a
                         // race lost against another order since the earlier soft
                         // stock check above) rejects the order outright.
-                        if (strtoupper($payment_mode) === 'COD') {
+                        if ($isCod) {
                             $stockResult = $this->CommonModel->decrementOrderStock($product_book_id, false, 'order_decrement', 0, null);
                             if (!$stockResult['success']) {
-                                $this->CommonModel->updateRowById('book_product', 'product_book_id', $product_book_id, [
-                                    'booking_status' => 2,
-                                    'cancel_message' => 'Insufficient stock for ' . $stockResult['product_name'],
-                                    'cancel_date' => date('Y-m-d H:i:s'),
-                                ]);
+                                $this->db->trans_rollback();
                                 $this->response(array('status' => 400, 'message' => 'Insufficient stock for product: ' . $stockResult['product_name'] . '. Please update your cart.', 'data' => null));
                                 return;
                             }
                             $this->CommonModel->updateRowById('book_product', 'product_book_id', $product_book_id, ['transaction_status' => '1']);
-                        }
 
-                        if ($walletAmount > 0) {
-                            debitWallet($tokenId, $walletAmount, 'Used on order ' . $orderId);
+                            // A prepaid order's wallet share is taken only once its
+                            // payment succeeds (CommonModel::markOrderPaid()) - it
+                            // used to be debited here for every order, so a failed
+                            // or abandoned online payment kept the customer's
+                            // wallet money.
+                            if ($walletAmount > 0 && !debitWallet($tokenId, $walletAmount, 'Used on order ' . $orderId)) {
+                                $this->db->trans_rollback();
+                                $this->response(array('status' => 400, 'message' => 'Your wallet balance has changed. Please refresh your cart and try again.', 'data' => null));
+                                return;
+                            }
                         }
+                    }
+                    if (!$product_book_id || $this->db->trans_status() === false) {
+                        $this->db->trans_rollback();
+                        $product_book_id = null;
+                    } else {
+                        $this->db->trans_commit();
+                    }
+                    if ($product_book_id) {
 
                         $smtp = $this->CommonModel->getSingleRowById('mail_smtp_setting', ['id' => 1]);
                         sendTemplatedMail('order_placed_user', @$getUser['email_id'], ['name' => $name, 'order_id' => $orderId, 'final_amount' => $finalAmount, 'app_name' => APP_NAME]);
