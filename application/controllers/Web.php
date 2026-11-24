@@ -72,9 +72,22 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
         );
 
         if (!$existing) {
+            // Location for the Visitor Locations report. A null lookup means
+            // the GeoIP database isn't installed yet - the row keeps its IP
+            // with country_code NULL so `php index.php GeoIpTool backfill` can
+            // fill it in later.
+            $this->load->library('GeoIp');
+            $ip = $this->geoip->clientIp();
+            $geo = $ip ? $this->geoip->lookup($ip) : ['country_code' => GeoIp::UNKNOWN];
+
             $this->CommonModel->insertRow('page_session_log', [
-                'session_token' => $sessionToken,
+                'session_token' => substr($sessionToken, 0, 64),
                 'user_id' => sessionId('login_user_id') ?: null,
+                'ip_address' => $ip,
+                'country_code' => @$geo['country_code'],
+                'country' => @$geo['country'],
+                'region' => @$geo['region'],
+                'city' => @$geo['city'],
                 'visited_at' => date('Y-m-d H:i:s'),
             ]);
         }

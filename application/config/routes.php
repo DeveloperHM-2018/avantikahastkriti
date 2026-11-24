@@ -176,6 +176,7 @@ $route['salesReport'] = 'AdminReports/salesReport';
 $route['inventoryReport'] = 'AdminReports/inventoryReport';
 $route['purchaseReport'] = 'AdminReports/purchaseReport';
 $route['vendorReport'] = 'AdminReports/vendorReport';
+$route['visitorLocationReport'] = 'AdminReports/visitorLocationReport';
 
 // ==> Admin self-service profile
 // NOTE: 'profile' is already taken by the customer-facing Web/profile route

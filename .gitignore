@@ -1,2 +1,4 @@
 /vendor/
 /upload/
+/application/geoip/*.mmdb
+/application/geoip/*.gz

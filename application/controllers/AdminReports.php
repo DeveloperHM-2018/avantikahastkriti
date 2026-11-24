@@ -207,4 +207,87 @@ class AdminReports extends CI_Controller
 
 		$this->load->view('admin/reports/vendor_report', $data);
 	}
+
+	// Where storefront visits come from. tbl_page_session_log holds one row
+	// per browser per day (Web::logSession), so "visits" = browser-days and
+	// "visitors" = distinct browsers. Optional ?country=XX narrows the
+	// state and city tables to one country.
+	public function visitorLocationReport()
+	{
+		$this->load->library('GeoIp'); // for GeoIp::UNKNOWN
+		$range = $this->dateRange();
+		$data['title'] = 'Visitor Locations';
+		$data['date_from'] = $range['from'];
+		$data['date_to'] = $range['to'];
+
+		$country = strtoupper((string) $this->input->get('country'));
+		$country = preg_match('/^[A-Z]{2}$/', $country) ? $country : '';
+		$data['country_filter'] = $country;
+
+		$where = "visited_at >= '{$range['from']} 00:00:00' AND visited_at <= '{$range['to']} 23:59:59'";
+		$located = "$where AND country_code IS NOT NULL AND country_code != '" . GeoIp::UNKNOWN . "'";
+		$scoped = $located . ($country ? " AND country_code = '$country'" : '');
+
+		$summary = $this->CommonModel->runQuery(
+			"SELECT COUNT(*) AS visits, COUNT(DISTINCT session_token) AS visitors,
+			SUM(CASE WHEN country_code IS NOT NULL AND country_code != '" . GeoIp::UNKNOWN . "' THEN 1 ELSE 0 END) AS located,
+			COUNT(DISTINCT CASE WHEN country_code IS NOT NULL AND country_code != '" . GeoIp::UNKNOWN . "' THEN country_code END) AS countries,
+			COUNT(DISTINCT CASE WHEN city IS NOT NULL THEN CONCAT(country_code, '|', COALESCE(region, ''), '|', city) END) AS cities
+			FROM tbl_page_session_log WHERE $where",
+			2
+		);
+		$data['visits'] = $summary ? (int) $summary['visits'] : 0;
+		$data['visitors'] = $summary ? (int) $summary['visitors'] : 0;
+		$data['located'] = $summary ? (int) $summary['located'] : 0;
+		$data['country_count'] = $summary ? (int) $summary['countries'] : 0;
+		$data['city_count'] = $summary ? (int) $summary['cities'] : 0;
+
+		$data['by_country'] = $this->CommonModel->runQuery(
+			"SELECT country_code, MAX(country) AS country, COUNT(*) AS visits, COUNT(DISTINCT session_token) AS visitors
+			FROM tbl_page_session_log WHERE $located
+			GROUP BY country_code ORDER BY visits DESC LIMIT 50",
+			1
+		) ?: [];
+
+		// Visits the report can't place, split by why, so the totals add up.
+		$data['unlocated'] = $this->CommonModel->runQuery(
+			"SELECT CASE
+				WHEN ip_address IS NULL AND country_code IS NULL THEN 'Not recorded (before location tracking)'
+				WHEN country_code IS NULL THEN 'Pending lookup'
+				ELSE 'Unknown location' END AS reason,
+			COUNT(*) AS visits
+			FROM tbl_page_session_log
+			WHERE $where AND (country_code IS NULL OR country_code = '" . GeoIp::UNKNOWN . "')
+			GROUP BY reason ORDER BY visits DESC",
+			1
+		) ?: [];
+
+		$data['by_region'] = $this->CommonModel->runQuery(
+			"SELECT country_code, region, COUNT(*) AS visits, COUNT(DISTINCT session_token) AS visitors
+			FROM tbl_page_session_log WHERE $scoped AND region IS NOT NULL
+			GROUP BY country_code, region ORDER BY visits DESC LIMIT 50",
+			1
+		) ?: [];
+
+		$data['by_city'] = $this->CommonModel->runQuery(
+			"SELECT country_code, region, city, COUNT(*) AS visits, COUNT(DISTINCT session_token) AS visitors
+			FROM tbl_page_session_log WHERE $scoped AND city IS NOT NULL
+			GROUP BY country_code, region, city ORDER BY visits DESC LIMIT 100",
+			1
+		) ?: [];
+
+		// Denominator for the % column of the state/city tables.
+		$scopedTotal = $data['located'];
+		if ($country) {
+			$scopedTotal = 0;
+			foreach ($data['by_country'] as $row) {
+				if ($row['country_code'] === $country) {
+					$scopedTotal = (int) $row['visits'];
+				}
+			}
+		}
+		$data['scoped_total'] = $scopedTotal;
+
+		$this->load->view('admin/reports/visitor_location_report', $data);
+	}
 }

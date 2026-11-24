@@ -192,7 +192,7 @@ $page = ACTIVE_PAGE;
 				<?php } ?>
 
 				<?php if (@PREV['reports_view'] == 1 || USER_TYPE == '1') { ?>
-					<li class=" <?= in_array($page, ['salesReport', 'inventoryReport', 'purchaseReport', 'vendorReport']) ? 'mm-active' : '' ?>">
+					<li class=" <?= in_array($page, ['salesReport', 'inventoryReport', 'purchaseReport', 'vendorReport', 'visitorLocationReport']) ? 'mm-active' : '' ?>">
 						<a href="javascript: void(0);" class="has-arrow waves-effect">
 							<i class="bx bx-bar-chart-alt-2"></i>
 							<span key="t-file-manager">Reports</span>
@@ -202,6 +202,7 @@ $page = ACTIVE_PAGE;
 							<li><a href="<?= base_url('inventoryReport') ?>" class="<?= $page == "inventoryReport" ? 'active' : '' ?>">Inventory</a></li>
 							<li><a href="<?= base_url('purchaseReport') ?>" class="<?= $page == "purchaseReport" ? 'active' : '' ?>">Purchase</a></li>
 							<li><a href="<?= base_url('vendorReport') ?>" class="<?= $page == "vendorReport" ? 'active' : '' ?>">Partner</a></li>
+							<li><a href="<?= base_url('visitorLocationReport') ?>" class="<?= $page == "visitorLocationReport" ? 'active' : '' ?>">Visitor Locations</a></li>
 						</ul>
 					</li>
 				<?php } ?>
