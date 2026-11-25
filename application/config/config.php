@@ -1,23 +1,30 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-if ($_SERVER['HTTP_HOST'] == '127.0.0.1' || $_SERVER['HTTP_HOST'] == 'localhost') {
+// Command-line runs (php index.php ...) have no HTTP_HOST / REQUEST_URI.
+// Default them so this file loads cleanly: with no host the environment is
+// PROD, so on the server `php index.php GeoIpTool update` just works with the
+// live database. Locally, prefix HTTP_HOST=localhost to get DEV.
+// (A warning raised while this file loads makes CodeIgniter re-enter its
+// config loader and silently lose most of $config - keep this block notice-free.)
+$httpHost = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '';
+if ($httpHost == '127.0.0.1' || $httpHost == 'localhost') {
     define('PRODUCT_ENVIRONMENT', 'DEV');
 } else {
     define('PRODUCT_ENVIRONMENT', 'PROD');
 }
 
-$directoryURI = $_SERVER['REQUEST_URI'];
-$path = parse_url($directoryURI, PHP_URL_PATH);
+$directoryURI = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '/';
+$path = (string) parse_url($directoryURI, PHP_URL_PATH);
 $components = explode('/', $path);
 
-$config['base_url'] = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http") . "://" . $_SERVER['HTTP_HOST'] . str_replace(basename($_SERVER['SCRIPT_NAME']), "", $_SERVER['SCRIPT_NAME']);
+$config['base_url'] = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http") . "://" . $httpHost . str_replace(basename($_SERVER['SCRIPT_NAME']), "", $_SERVER['SCRIPT_NAME']);
 if (PRODUCT_ENVIRONMENT == 'PROD') {
-    $page = $components[1];
+    $page = isset($components[1]) ? $components[1] : '';
 
     define('OTP_ENABLE', true);
 } else {
-    $page = $components[2];
+    $page = isset($components[2]) ? $components[2] : '';
 
     define('OTP_ENABLE', false);
 }

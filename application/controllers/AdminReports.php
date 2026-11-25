@@ -236,8 +236,17 @@ class AdminReports extends CI_Controller
 	// state and city breakdowns (and the city bubbles) to one country.
 	public function visitorLocationReport()
 	{
-		$this->load->library('GeoIp'); // for GeoIp::UNKNOWN
+		$this->load->library('GeoIp');
 		$unknown = GeoIp::UNKNOWN;
+
+		// Fill in visits logged while the location database was missing (or
+		// before map coordinates existed) - no SSH needed. Capped per page
+		// load so the report stays fast; the rest is done on the next view.
+		$pending = $this->geoip->pendingCount();
+		if ($pending > 0 && $this->geoip->isAvailable()) {
+			$this->geoip->backfill(3000);
+			$pending = $this->geoip->pendingCount();
+		}
 
 		// Date presets, like Shopify's picker. Custom uses date_from/date_to.
 		$presets = [
@@ -399,7 +408,46 @@ class AdminReports extends CI_Controller
 			'by_region' => $byRegion,
 			'by_city' => $byCity,
 			'unlocated' => $unlocated,
+			'geo' => [
+				'info' => $this->geoip->databaseInfo(),
+				'pending' => $pending,
+				'can_manage' => USER_TYPE == '1',
+				'notice' => $this->session->flashdata('vl_geo_notice'),
+				'error' => $this->session->flashdata('vl_geo_error'),
+			],
 		];
 		$this->load->view('admin/reports/visitor_location_report', $data);
+	}
+
+	// Buttons on the Visitor Locations page - the no-SSH way to install or
+	// refresh the location database and fill in missing locations. Super
+	// admin only (it downloads ~60 MB to the server). Same code as the
+	// GeoIpTool command-line tool.
+	public function visitorGeoMaintenance()
+	{
+		if (USER_TYPE != '1' || $this->input->method() !== 'post') {
+			show_404();
+		}
+		$this->load->library('GeoIp');
+		$back = $this->input->post('back');
+		$back = (is_string($back) && strpos($back, base_url('visitorLocationReport')) === 0) ? $back : base_url('visitorLocationReport');
+
+		ignore_user_abort(true); // finish the swap even if the browser stops waiting
+		try {
+			if ($this->input->post('action') === 'update') {
+				$message = $this->geoip->installLatest();
+				$message .= ' Filled in ' . number_format($this->geoip->backfill()) . ' visit(s).';
+				$this->CommonModel->logAdminActivity(ACTOR_TYPE_ADMIN, sessionId('admin_id'), 'geoip_database_update', 'setting', 0);
+			} else {
+				if (!$this->geoip->isAvailable()) {
+					throw new \RuntimeException('Install the location database first.');
+				}
+				$message = 'Filled in ' . number_format($this->geoip->backfill()) . ' visit(s).';
+			}
+			$this->session->set_flashdata('vl_geo_notice', $message);
+		} catch (\Exception $e) {
+			$this->session->set_flashdata('vl_geo_error', $e->getMessage());
+		}
+		redirect($back);
 	}
 }

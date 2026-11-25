@@ -188,6 +188,42 @@ $chartData = [
                 </div>
             <?php endif; ?>
 
+            <?php
+            // Location database status + the no-SSH maintenance buttons.
+            $geoInfo = $geo['info'];
+            $geoBack = current_url() . ($_SERVER['QUERY_STRING'] ?? '' ? '?' . $_SERVER['QUERY_STRING'] : '');
+            ?>
+            <?php if ($geo['notice']) : ?>
+                <div class="alert alert-success py-2"><i class="bx bx-check-circle"></i> <?= html_escape($geo['notice']) ?></div>
+            <?php endif; ?>
+            <?php if ($geo['error']) : ?>
+                <div class="alert alert-danger py-2"><i class="bx bx-error-circle"></i> <?= html_escape($geo['error']) ?></div>
+            <?php endif; ?>
+            <?php if (!$geoInfo || $geo['can_manage']) : ?>
+                <div class="alert <?= $geoInfo ? 'alert-light border' : 'alert-warning' ?> d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
+                    <span class="small">
+                        <?php if ($geoInfo) : ?>
+                            <i class="bx bx-map-pin"></i> Location database installed<?= $geoInfo['built'] ? ' (edition ' . date('M Y', strtotime($geoInfo['built'])) . ')' : '' ?>.
+                            <?= $geo['pending'] > 0 ? number_format($geo['pending']) . ' visit(s) still waiting for a location - they fill in automatically each time this page opens.' : 'All logged visits have a location.' ?>
+                        <?php else : ?>
+                            <i class="bx bx-error"></i> <strong>Location database not installed</strong> - new visits are logged but can't be placed on the map yet<?= $geo['pending'] > 0 ? ' (' . number_format($geo['pending']) . ' waiting)' : '' ?>.
+                            <?= $geo['can_manage'] ? '' : 'Ask a super admin to install it from this page.' ?>
+                        <?php endif; ?>
+                    </span>
+                    <?php if ($geo['can_manage']) : ?>
+                        <form method="post" action="<?= base_url('visitorGeoMaintenance') ?>" class="d-flex gap-2 vl-geo-form">
+                            <input type="hidden" name="back" value="<?= html_escape($geoBack) ?>">
+                            <?php if ($geoInfo && $geo['pending'] > 0) : ?>
+                                <button type="submit" name="action" value="backfill" class="btn btn-sm btn-outline-primary">Fill in missing locations</button>
+                            <?php endif; ?>
+                            <button type="submit" name="action" value="update" class="btn btn-sm <?= $geoInfo ? 'btn-outline-secondary' : 'btn-primary' ?>"
+                                data-confirm="This downloads the latest location database (about 60 MB) to the server and takes a minute or two. Continue?">
+                                <?= $geoInfo ? 'Update location database' : 'Install location database' ?>
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
             <!-- KPI tiles -->
             <div class="row">
                 <?php foreach ($kpis as $k) : ?>
@@ -380,6 +416,18 @@ $chartData = [
         var dayLabel = function (d) { return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); };
         var dates = VL.daily.map(function (r) { return r.date; });
 
+        // Maintenance buttons: confirm the big download, then show progress
+        // and lock the buttons so it isn't started twice.
+        $('.vl-geo-form button').on('click', function (e) {
+            var msg = $(this).data('confirm');
+            if (msg && !window.confirm(msg)) { e.preventDefault(); return; }
+            var btn = $(this), form = btn.closest('form');
+            form.append($('<input type="hidden" name="action">').val(btn.val()));
+            setTimeout(function () {
+                form.find('button').prop('disabled', true);
+                btn.html('<i class="bx bx-loader-alt bx-spin"></i> Working... please keep this page open');
+            }, 0);
+        });
         // Date preset picker: presets apply at once, custom shows the inputs.
         $('#vlRange').on('change', function () {
             if (this.value === 'custom') {
