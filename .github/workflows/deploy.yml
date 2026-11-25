@@ -18,9 +18,9 @@ jobs:
     env:
       # Hostinger shared hosting: SSH/SFTP is on port 65002 and must be
       # enabled in hPanel -> Advanced -> SSH Access. FTP_SERVER is the SSH IP
-      # shown there, FTP_USERNAME the SSH user (u895781871), FTP_PASSWORD
-      # its password. FTP_SERVER_DIR is relative to the SSH home, e.g.
-      # domains/<your-domain>/public_html
+      # shown there, FTP_USERNAME the SSH user, FTP_PASSWORD its password.
+      # FTP_SERVER_DIR is relative to the SSH home (this account uses
+      # websites/<site>/public_html, not public_html).
       SFTP_HOST: ${{ secrets.FTP_SERVER }}
       SFTP_USER: ${{ secrets.FTP_USERNAME }}
       LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
@@ -71,8 +71,8 @@ jobs:
           # Refuse to deploy unless REMOTE_DIR really is this site, so a
           # wrong path can't spray files over the wrong folder.
           if ! lftp -f <(cat /tmp/lftp-open; echo 'cls -1 application/config/config.php index.php') ; then
-            echo "::error::Could not connect, or '$REMOTE_DIR' is not the site root (no application/config/config.php there). Check FTP_SERVER / FTP_PORT / FTP_USERNAME / FTP_PASSWORD and set FTP_SERVER_DIR (e.g. domains/<domain>/public_html). Home directory contains:"
-            lftp -e "set sftp:auto-confirm yes; set net:max-retries 1; open --env-password -u \"$SFTP_USER\" -p \"$SFTP_PORT\" \"sftp://$SFTP_HOST\"; cls -1 . domains/; bye" || true
+            echo "::error::Could not connect, or '$REMOTE_DIR' is not the site root (no application/config/config.php there). Check FTP_SERVER / FTP_PORT / FTP_USERNAME / FTP_PASSWORD and set FTP_SERVER_DIR to the folder holding application/ below (without the trailing /application/config/config.php). Folders found:"
+            lftp -e "set sftp:auto-confirm yes; set net:max-retries 1; open --env-password -u \"$SFTP_USER\" -p \"$SFTP_PORT\" \"sftp://$SFTP_HOST\"; cls -1 . ; cls -1 -d websites/*/ websites/*/*/ domains/*/ ; cls -1 websites/*/*/application/config/config.php websites/*/application/config/config.php domains/*/public_html/application/config/config.php; bye" || true
             exit 1
           fi
 
