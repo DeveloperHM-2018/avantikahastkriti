@@ -2,3 +2,10 @@
 /upload/
 /application/geoip/*.mmdb
 /application/geoip/*.gz
+
+# Archives, database scripts and bundled third-party code are kept out of git.
+# SQL migrations stay on disk locally - run them on the server by hand.
+*.zip
+*.sql
+*.sql.gz
+/application/third_party/

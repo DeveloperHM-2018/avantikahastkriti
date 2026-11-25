@@ -9,12 +9,12 @@
  * @version: 0.0.5
  */
 
-require_once APPPATH . 'third_party/php-jwt/JWT.php';
-require_once APPPATH . 'third_party/php-jwt/BeforeValidException.php';
-require_once APPPATH . 'third_party/php-jwt/ExpiredException.php';
-require_once APPPATH . 'third_party/php-jwt/SignatureInvalidException.php';
+// firebase/php-jwt comes from composer (it used to be copied into
+// application/third_party). composer_autoload is off in config.php.
+require_once APPPATH . '../vendor/autoload.php';
 
 use \Firebase\JWT\JWT;
+use \Firebase\JWT\Key;
 
 #[\AllowDynamicProperties]
 class Authorization_Token
@@ -94,7 +94,7 @@ class Authorization_Token
                  * Token Decode
                  */
                 try {
-                    $token_decode = JWT::decode($headers[$token_data['key']], $this->token_key, array($this->token_algorithm));
+                    $token_decode = JWT::decode($headers[$token_data['key']], new Key($this->token_key, $this->token_algorithm));
                 } catch (Exception $e) {
                     return ['status' => 0, 'message' => $e->getMessage()];
                 }
@@ -146,7 +146,7 @@ class Authorization_Token
                      * Token Decode
                      */
                     try {
-                        $token_decode = JWT::decode($token, $this->token_key, array($this->token_algorithm));
+                        $token_decode = JWT::decode($token, new Key($this->token_key, $this->token_algorithm));
                     } catch (Exception $e) {
                         return ['status' => 0, 'message' => $e->getMessage()];
                     }
@@ -226,7 +226,7 @@ class Authorization_Token
                  * Token Decode
                  */
                 try {
-                    $token_decode = JWT::decode($headers[$token_data['key']], $this->token_key, array($this->token_algorithm));
+                    $token_decode = JWT::decode($headers[$token_data['key']], new Key($this->token_key, $this->token_algorithm));
                 } catch (Exception $e) {
                     return ['status' => 0, 'message' => $e->getMessage()];
                 }

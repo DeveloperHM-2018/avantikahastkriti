@@ -6,15 +6,31 @@ on:
       - master
   workflow_dispatch:
 
+# Never run two deploys at once - they would race on the remote manifest.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
-  ftp-deploy:
-    name: FTP deploy
+  sftp-deploy:
+    name: SFTP deploy
     runs-on: ubuntu-latest
+    env:
+      # Hostinger shared hosting: SSH/SFTP is on port 65002 and must be
+      # enabled in hPanel -> Advanced -> SSH Access. FTP_SERVER is the SSH IP
+      # shown there, FTP_USERNAME the SSH user (u895781871), FTP_PASSWORD
+      # its password. FTP_SERVER_DIR is relative to the SSH home, e.g.
+      # domains/<your-domain>/public_html
+      SFTP_HOST: ${{ secrets.FTP_SERVER }}
+      SFTP_USER: ${{ secrets.FTP_USERNAME }}
+      LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      SFTP_PORT: ${{ secrets.FTP_PORT || '65002' }}
+      REMOTE_DIR: ${{ secrets.FTP_SERVER_DIR || 'public_html' }}
+      # Kept inside application/, which .htaccess denies to the web.
+      MANIFEST: application/.deploy-manifest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -25,22 +41,65 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-dev --optimize-autoloader --no-interaction --no-progress
 
-      - name: Deploy via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: ${{ secrets.FTP_PORT || 21 }}
-          protocol: ftps
-          local-dir: ./
-          server-dir: ${{ secrets.FTP_SERVER_DIR || '/public_html/' }}
-          dangerous-clean-slate: false
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.github/**
-            **/.DS_Store
-            **/node_modules/**
-            .ftp-deploy-sync-state.json
-            upload/**
+      - name: Install lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      - name: Build file manifest
+        run: |
+          # Tracked files plus the composer-built vendor/. Never uploaded:
+          # CI files, the source zip (it holds config with DB passwords),
+          # customer uploads, and the GeoIP database (installed on the server
+          # by `php index.php GeoIpTool update`).
+          { git ls-files; find vendor -type f; } \
+            | grep -v -E '^(\.github/|\.git|application\.zip$|upload/|application/geoip/.*\.(mmdb|gz)$)|(^|/)\.DS_Store$' \
+            | sort -u > /tmp/files.txt
+          tr '\n' '\0' < /tmp/files.txt | xargs -0 sha1sum | sort -k2 > /tmp/manifest.new
+          echo "$(wc -l < /tmp/manifest.new) files in this release"
+
+      - name: Check server and fetch previous manifest
+        run: |
+          cat > /tmp/lftp-open <<EOF
+          set sftp:auto-confirm yes
+          set net:timeout 30
+          set net:max-retries 3
+          set net:reconnect-interval-base 5
+          set cmd:fail-exit yes
+          open --env-password -u "$SFTP_USER" -p "$SFTP_PORT" "sftp://$SFTP_HOST"
+          cd "$REMOTE_DIR"
+          EOF
+
+          # Refuse to deploy unless REMOTE_DIR really is this site, so a
+          # wrong path can't spray files over the wrong folder.
+          if ! lftp -f <(cat /tmp/lftp-open; echo 'cls -1 application/config/config.php index.php') ; then
+            echo "::error::Could not connect, or '$REMOTE_DIR' is not the site root (no application/config/config.php there). Check FTP_SERVER / FTP_PORT / FTP_USERNAME / FTP_PASSWORD and set FTP_SERVER_DIR (e.g. domains/<domain>/public_html). Home directory contains:"
+            lftp -e "set sftp:auto-confirm yes; set net:max-retries 1; open --env-password -u \"$SFTP_USER\" -p \"$SFTP_PORT\" \"sftp://$SFTP_HOST\"; cls -1 . domains/; bye" || true
+            exit 1
+          fi
+
+          rm -f /tmp/manifest.old
+          lftp -f <(cat /tmp/lftp-open; echo "get \"$MANIFEST\" -o /tmp/manifest.old") || true
+          touch /tmp/manifest.old
+
+      - name: Upload changed files
+        run: |
+          # Lines (hash + path) that are new or changed since the last deploy.
+          # Files deleted from git are left on the server, as before.
+          comm -13 <(sort /tmp/manifest.old) <(sort /tmp/manifest.new) | cut -c43- > /tmp/changed.txt
+          count=$(wc -l < /tmp/changed.txt)
+          echo "$count file(s) to upload"
+          if [ "$count" -eq 0 ]; then exit 0; fi
+
+          {
+            cat /tmp/lftp-open
+            # mput -d recreates each file's directory; 8 parallel transfers.
+            split -l 200 /tmp/changed.txt /tmp/chunk.
+            for chunk in /tmp/chunk.*; do
+              printf 'mput -d -P 8'
+              while IFS= read -r f; do printf ' "%s"' "$f"; done < "$chunk"
+              printf '\n'
+            done
+            # Manifest last, only reached if every upload above succeeded.
+            echo "put /tmp/manifest.new -o \"$MANIFEST\""
+          } > /tmp/lftp-upload
+          lftp -f /tmp/lftp-upload
+          echo "Deployed $count file(s)"
