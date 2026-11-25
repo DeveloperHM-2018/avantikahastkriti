@@ -118,7 +118,8 @@
                                     </div>
                                     <div class="col-md-12 mb-3">
                                         <label class="form-label">Shiprocket Pickup Location Nickname</label>
-                                        <input class="form-control" type="text" name="shiprocket_pickup_nickname" value="<?= @$vendor['shiprocket_pickup_nickname'] ?>" placeholder="e.g. vendor-rahul-warehouse">
+                                        <input class="form-control" type="text" name="shiprocket_pickup_nickname" value="<?= html_escape(set_value('shiprocket_pickup_nickname', (string) @$vendor['shiprocket_pickup_nickname'])) ?>" placeholder="e.g. vendor-rahul-warehouse">
+                                        <?= form_error('shiprocket_pickup_nickname') ?>
                                         <small class="text-muted">Register this partner's pickup address in your Shiprocket dashboard first, then enter the exact nickname you gave it here - orders sourced from this vendor will use it automatically when syncing to Shiprocket. Leave blank to keep shipping their orders from the default warehouse.</small>
                                     </div>
                                 </div>

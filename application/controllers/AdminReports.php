@@ -208,86 +208,198 @@ class AdminReports extends CI_Controller
 		$this->load->view('admin/reports/vendor_report', $data);
 	}
 
-	// Where storefront visits come from. tbl_page_session_log holds one row
-	// per browser per day (Web::logSession), so "visits" = browser-days and
-	// "visitors" = distinct browsers. Optional ?country=XX narrows the
-	// state and city tables to one country.
+
+	// India map regions (jVectorMap in_mill_en) by the state names the GeoIP
+	// database uses. The map predates Telangana and Ladakh, so those have no
+	// shape - they still appear in the lists and as city bubbles.
+	private static $indiaStateCodes = [
+		'andaman and nicobar' => 'IN-AN', 'andaman and nicobar islands' => 'IN-AN',
+		'andhra pradesh' => 'IN-AP', 'arunachal pradesh' => 'IN-AR', 'assam' => 'IN-AS',
+		'bihar' => 'IN-BR', 'chandigarh' => 'IN-CH', 'chhattisgarh' => 'IN-CT',
+		'daman and diu' => 'IN-DD', 'dadra and nagar haveli' => 'IN-DN',
+		'dadra and nagar haveli and daman and diu' => 'IN-DN',
+		'delhi' => 'IN-DL', 'national capital territory of delhi' => 'IN-DL', 'nct of delhi' => 'IN-DL',
+		'goa' => 'IN-GA', 'gujarat' => 'IN-GJ', 'haryana' => 'IN-HR', 'himachal pradesh' => 'IN-HP',
+		'jammu and kashmir' => 'IN-JK', 'jharkhand' => 'IN-JH', 'karnataka' => 'IN-KA', 'kerala' => 'IN-KL',
+		'madhya pradesh' => 'IN-MP', 'maharashtra' => 'IN-MH', 'manipur' => 'IN-MN', 'meghalaya' => 'IN-ML',
+		'mizoram' => 'IN-MZ', 'nagaland' => 'IN-NL', 'odisha' => 'IN-OR', 'orissa' => 'IN-OR',
+		'puducherry' => 'IN-PY', 'pondicherry' => 'IN-PY', 'punjab' => 'IN-PB', 'rajasthan' => 'IN-RJ',
+		'sikkim' => 'IN-SK', 'tamil nadu' => 'IN-TN', 'tripura' => 'IN-TR', 'uttar pradesh' => 'IN-UP',
+		'uttarakhand' => 'IN-UT', 'uttaranchal' => 'IN-UT', 'west bengal' => 'IN-WB',
+	];
+
+	// Shopify-style "Sessions by location": KPIs and a daily trend compared
+	// with the previous period of the same length, a world / India map, and
+	// every country, state and city. tbl_page_session_log holds one row per
+	// browser per day (Web::logSession), so a "session" here = one browser on
+	// one day and a "visitor" = one distinct browser. ?country=XX narrows the
+	// state and city breakdowns (and the city bubbles) to one country.
 	public function visitorLocationReport()
 	{
 		$this->load->library('GeoIp'); // for GeoIp::UNKNOWN
-		$range = $this->dateRange();
-		$data['title'] = 'Visitor Locations';
-		$data['date_from'] = $range['from'];
-		$data['date_to'] = $range['to'];
+		$unknown = GeoIp::UNKNOWN;
+
+		// Date presets, like Shopify's picker. Custom uses date_from/date_to.
+		$presets = [
+			'today' => ['Today', 0], 'yesterday' => ['Yesterday', 1], '7d' => ['Last 7 days', 7],
+			'30d' => ['Last 30 days', 30], '90d' => ['Last 90 days', 90], '365d' => ['Last 365 days', 365],
+		];
+		$preset = (string) $this->input->get('range');
+		if ($preset === '' && !$this->input->get('date_from')) {
+			$preset = '30d';
+		}
+		if (isset($presets[$preset])) {
+			$days = $presets[$preset][1];
+			if ($preset === 'today') {
+				$from = $to = date('Y-m-d');
+			} elseif ($preset === 'yesterday') {
+				$from = $to = date('Y-m-d', strtotime('-1 day'));
+			} else {
+				$to = date('Y-m-d');
+				$from = date('Y-m-d', strtotime('-' . ($days - 1) . ' days'));
+			}
+		} else {
+			$preset = 'custom';
+			$range = $this->dateRange();
+			$from = min($range['from'], $range['to']);
+			$to = max($range['from'], $range['to']);
+		}
+		$length = (int) round((strtotime($to) - strtotime($from)) / 86400) + 1;
+		$prevTo = date('Y-m-d', strtotime($from . ' -1 day'));
+		$prevFrom = date('Y-m-d', strtotime($prevTo . ' -' . ($length - 1) . ' days'));
 
 		$country = strtoupper((string) $this->input->get('country'));
 		$country = preg_match('/^[A-Z]{2}$/', $country) ? $country : '';
-		$data['country_filter'] = $country;
 
-		$where = "visited_at >= '{$range['from']} 00:00:00' AND visited_at <= '{$range['to']} 23:59:59'";
-		$located = "$where AND country_code IS NOT NULL AND country_code != '" . GeoIp::UNKNOWN . "'";
-		$scoped = $located . ($country ? " AND country_code = '$country'" : '');
+		$in = function ($a, $b) {
+			return "visited_at >= '$a 00:00:00' AND visited_at <= '$b 23:59:59'";
+		};
+		$cur = $in($from, $to);
+		$prev = $in($prevFrom, $prevTo);
+		$located = " AND country_code IS NOT NULL AND country_code != '$unknown'";
+		$scope = $located . ($country ? " AND country_code = '$country'" : '');
 
-		$summary = $this->CommonModel->runQuery(
-			"SELECT COUNT(*) AS visits, COUNT(DISTINCT session_token) AS visitors,
-			SUM(CASE WHEN country_code IS NOT NULL AND country_code != '" . GeoIp::UNKNOWN . "' THEN 1 ELSE 0 END) AS located,
-			COUNT(DISTINCT CASE WHEN country_code IS NOT NULL AND country_code != '" . GeoIp::UNKNOWN . "' THEN country_code END) AS countries,
-			COUNT(DISTINCT CASE WHEN city IS NOT NULL THEN CONCAT(country_code, '|', COALESCE(region, ''), '|', city) END) AS cities
-			FROM tbl_page_session_log WHERE $where",
-			2
+		$totals = function ($where) use ($located) {
+			$row = $this->CommonModel->runQuery(
+				"SELECT COUNT(*) AS sessions, COUNT(DISTINCT session_token) AS visitors,
+				SUM(CASE WHEN 1 $located THEN 1 ELSE 0 END) AS located,
+				COUNT(DISTINCT CASE WHEN 1 $located THEN country_code END) AS countries,
+				COUNT(DISTINCT CASE WHEN city IS NOT NULL $located THEN CONCAT(country_code, '|', COALESCE(region, ''), '|', city) END) AS cities
+				FROM tbl_page_session_log WHERE $where",
+				2
+			) ?: [];
+			return array_map('intval', $row + ['sessions' => 0, 'visitors' => 0, 'located' => 0, 'countries' => 0, 'cities' => 0]);
+		};
+
+		// One value per day of the range (zero-filled), so the trend and
+		// sparklines line up day-for-day with the previous period.
+		$daily = function ($a, $b) use ($in, $located) {
+			$rows = $this->CommonModel->runQuery(
+				"SELECT DATE(visited_at) AS d, COUNT(*) AS sessions, COUNT(DISTINCT session_token) AS visitors,
+				COUNT(DISTINCT CASE WHEN 1 $located THEN country_code END) AS countries,
+				COUNT(DISTINCT CASE WHEN city IS NOT NULL $located THEN CONCAT(country_code, '|', COALESCE(region, ''), '|', city) END) AS cities
+				FROM tbl_page_session_log WHERE " . $in($a, $b) . " GROUP BY DATE(visited_at)",
+				1
+			) ?: [];
+			$byDate = array_column($rows, null, 'd');
+			$series = [];
+			for ($t = strtotime($a); $t <= strtotime($b); $t += 86400) {
+				$d = date('Y-m-d', $t);
+				$r = $byDate[$d] ?? [];
+				$series[] = [
+					'date' => $d,
+					'sessions' => (int) ($r['sessions'] ?? 0),
+					'visitors' => (int) ($r['visitors'] ?? 0),
+					'countries' => (int) ($r['countries'] ?? 0),
+					'cities' => (int) ($r['cities'] ?? 0),
+				];
+			}
+			return $series;
+		};
+
+		// Groups for the current period, each with its previous-period
+		// sessions so every row can show a change like Shopify does.
+		$grouped = function ($select, $group, $extraWhere, $key) use ($cur, $prev) {
+			$now = $this->CommonModel->runQuery(
+				"SELECT $select, COUNT(*) AS sessions, COUNT(DISTINCT session_token) AS visitors
+				FROM tbl_page_session_log WHERE $cur $extraWhere GROUP BY $group ORDER BY sessions DESC",
+				1
+			) ?: [];
+			$before = $this->CommonModel->runQuery(
+				"SELECT $select, COUNT(*) AS sessions
+				FROM tbl_page_session_log WHERE $prev $extraWhere GROUP BY $group",
+				1
+			) ?: [];
+			$prevByKey = [];
+			foreach ($before as $row) {
+				$prevByKey[$key($row)] = (int) $row['sessions'];
+			}
+			foreach ($now as &$row) {
+				$row['sessions'] = (int) $row['sessions'];
+				$row['visitors'] = (int) $row['visitors'];
+				$row['prev_sessions'] = $prevByKey[$key($row)] ?? 0;
+			}
+			return $now;
+		};
+
+		$byCountry = $grouped(
+			'country_code, MAX(country) AS country', 'country_code', $located,
+			function ($r) { return $r['country_code']; }
 		);
-		$data['visits'] = $summary ? (int) $summary['visits'] : 0;
-		$data['visitors'] = $summary ? (int) $summary['visitors'] : 0;
-		$data['located'] = $summary ? (int) $summary['located'] : 0;
-		$data['country_count'] = $summary ? (int) $summary['countries'] : 0;
-		$data['city_count'] = $summary ? (int) $summary['cities'] : 0;
+		$byRegion = $grouped(
+			'country_code, region', 'country_code, region', "$scope AND region IS NOT NULL",
+			function ($r) { return $r['country_code'] . '|' . $r['region']; }
+		);
+		$byCity = $grouped(
+			'country_code, region, city, AVG(latitude) AS lat, AVG(longitude) AS lng', 'country_code, region, city', "$scope AND city IS NOT NULL",
+			function ($r) { return $r['country_code'] . '|' . $r['region'] . '|' . $r['city']; }
+		);
 
-		$data['by_country'] = $this->CommonModel->runQuery(
-			"SELECT country_code, MAX(country) AS country, COUNT(*) AS visits, COUNT(DISTINCT session_token) AS visitors
-			FROM tbl_page_session_log WHERE $located
-			GROUP BY country_code ORDER BY visits DESC LIMIT 50",
-			1
-		) ?: [];
+		$countryNames = array_column($byCountry, 'country', 'country_code');
+		foreach ($byRegion as &$row) {
+			$row['country'] = $countryNames[$row['country_code']] ?? $row['country_code'];
+			$row['map_code'] = $row['country_code'] === 'IN' ? (self::$indiaStateCodes[strtolower(trim($row['region']))] ?? null) : null;
+		}
+		unset($row);
+		foreach ($byCity as &$row) {
+			$row['country'] = $countryNames[$row['country_code']] ?? $row['country_code'];
+			$row['lat'] = $row['lat'] !== null ? round((float) $row['lat'], 4) : null;
+			$row['lng'] = $row['lng'] !== null ? round((float) $row['lng'], 4) : null;
+		}
+		unset($row);
 
-		// Visits the report can't place, split by why, so the totals add up.
-		$data['unlocated'] = $this->CommonModel->runQuery(
+		// Sessions the map can't place, split by why, so the totals add up.
+		$unlocated = $this->CommonModel->runQuery(
 			"SELECT CASE
 				WHEN ip_address IS NULL AND country_code IS NULL THEN 'Not recorded (before location tracking)'
 				WHEN country_code IS NULL THEN 'Pending lookup'
 				ELSE 'Unknown location' END AS reason,
-			COUNT(*) AS visits
+			COUNT(*) AS sessions
 			FROM tbl_page_session_log
-			WHERE $where AND (country_code IS NULL OR country_code = '" . GeoIp::UNKNOWN . "')
-			GROUP BY reason ORDER BY visits DESC",
+			WHERE $cur AND (country_code IS NULL OR country_code = '$unknown')
+			GROUP BY reason ORDER BY sessions DESC",
 			1
 		) ?: [];
 
-		$data['by_region'] = $this->CommonModel->runQuery(
-			"SELECT country_code, region, COUNT(*) AS visits, COUNT(DISTINCT session_token) AS visitors
-			FROM tbl_page_session_log WHERE $scoped AND region IS NOT NULL
-			GROUP BY country_code, region ORDER BY visits DESC LIMIT 50",
-			1
-		) ?: [];
-
-		$data['by_city'] = $this->CommonModel->runQuery(
-			"SELECT country_code, region, city, COUNT(*) AS visits, COUNT(DISTINCT session_token) AS visitors
-			FROM tbl_page_session_log WHERE $scoped AND city IS NOT NULL
-			GROUP BY country_code, region, city ORDER BY visits DESC LIMIT 100",
-			1
-		) ?: [];
-
-		// Denominator for the % column of the state/city tables.
-		$scopedTotal = $data['located'];
-		if ($country) {
-			$scopedTotal = 0;
-			foreach ($data['by_country'] as $row) {
-				if ($row['country_code'] === $country) {
-					$scopedTotal = (int) $row['visits'];
-				}
-			}
-		}
-		$data['scoped_total'] = $scopedTotal;
-
+		$data = [
+			'title' => 'Visitor Locations',
+			'preset' => $preset,
+			'presets' => $presets,
+			'date_from' => $from,
+			'date_to' => $to,
+			'prev_from' => $prevFrom,
+			'prev_to' => $prevTo,
+			'country_filter' => $country,
+			'country_filter_name' => $country ? ($countryNames[$country] ?? $country) : '',
+			'totals' => $totals($cur),
+			'prev_totals' => $totals($prev),
+			'daily' => $daily($from, $to),
+			'prev_daily' => $daily($prevFrom, $prevTo),
+			'by_country' => $byCountry,
+			'by_region' => $byRegion,
+			'by_city' => $byCity,
+			'unlocated' => $unlocated,
+		];
 		$this->load->view('admin/reports/visitor_location_report', $data);
 	}
 }

@@ -387,7 +387,7 @@ $status = $this->input->get('status');
                     <div class="row">
                         <div class="col-lg-6 mb-3">
                             <label>Pickup Location</label>
-                            <input type="text" name="pickup_location" id="sync_pickup_location" class="form-control" required>
+                            <select name="pickup_location" id="sync_pickup_location" class="form-control" required></select>
                             <small class="text-muted" id="sync_pickup_hint"></small>
                         </div>
                         <div class="col-lg-6 mb-3">
@@ -845,7 +845,7 @@ $status = $this->input->get('status');
                         type: 'house'
                     };
                     $('#sync_name').val(response.data.name);
-                    $('#sync_email').val(response.data.email_id || 'customer@example.com');
+                    $('#sync_email').val(response.data.email || '');
                     $('#sync_phone').val(response.data.contact_no);
                     $('#sync_address').val(parsed.address);
                     $('#sync_address_2').val('');
@@ -854,7 +854,23 @@ $status = $this->input->get('status');
                     $('#sync_state').val(parsed.state);
                     $('#sync_payment_method').val(response.data.payment_mode === 'COD' ? 'COD' : 'Prepaid');
 
-                    $('#sync_pickup_location').val(response.data.pickup_location);
+                    // Only nicknames registered in Shiprocket are offered -
+                    // anything else is rejected by Shiprocket on sync.
+                    const pickupSelect = $('#sync_pickup_location').empty();
+                    const registered = response.data.registered_pickups;
+                    if (Array.isArray(registered)) {
+                        pickupSelect.append($('<option>', { value: '', text: '-- Select pickup location --' }));
+                        registered.forEach(function(loc) {
+                            pickupSelect.append($('<option>', {
+                                value: loc.nickname,
+                                text: loc.nickname + ' (' + [loc.city, loc.state, loc.pincode].filter(Boolean).join(', ') + ')'
+                            }));
+                        });
+                    } else {
+                        // Couldn't reach Shiprocket to list them - offer the stored one.
+                        pickupSelect.append($('<option>', { value: response.data.pickup_location, text: response.data.pickup_location }));
+                    }
+                    pickupSelect.val(response.data.pickup_location || '');
                     const warning = $('#sync_source_warning');
                     const hint = $('#sync_pickup_hint');
                     if (source.type === 'vendor') {
@@ -870,6 +886,15 @@ $status = $this->input->get('status');
                     } else {
                         hint.text('House pickup location (default).');
                         warning.hide();
+                    }
+                    if (response.data.pickup_registered === false) {
+                        const stored = response.data.pickup_stored || '';
+                        warning.text('The saved pickup nickname "' + stored + '" is not registered in Shiprocket, so syncing with it would fail. ' +
+                            (response.data.pickup_location
+                                ? 'Preselected "' + response.data.pickup_location + '" because it has the same pickup pincode - check it is right, then fix the nickname under Partners > Edit Partner.'
+                                : 'Choose the correct location below, or register this pickup address in Shiprocket first.')).show();
+                    } else if (response.data.pickup_registered === null) {
+                        hint.text(hint.text() + ' (Could not load the Shiprocket pickup list to verify it.)');
                     }
 
                     $('#shiprocketSyncModal').modal('show');

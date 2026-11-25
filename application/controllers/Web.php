@@ -88,6 +88,8 @@ $data['featuredCategories'] = $this->CommonModel->getRowByIdInOrder('category', 
                 'country' => @$geo['country'],
                 'region' => @$geo['region'],
                 'city' => @$geo['city'],
+                'latitude' => @$geo['latitude'],
+                'longitude' => @$geo['longitude'],
                 'visited_at' => date('Y-m-d H:i:s'),
             ]);
         }

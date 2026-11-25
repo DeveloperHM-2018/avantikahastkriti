@@ -54,12 +54,12 @@ class GeoIp
 		return filter_var($remote, FILTER_VALIDATE_IP) ? $remote : null;
 	}
 
-	// Returns ['country_code','country','region','city'], or null when the
+	// Returns country_code, country, region, city, latitude, longitude - or null when the
 	// database isn't installed (caller leaves the row pending for backfill).
 	// An address the database can't place comes back as country_code 'ZZ'.
 	public function lookup($ip)
 	{
-		$unknown = ['country_code' => self::UNKNOWN, 'country' => null, 'region' => null, 'city' => null];
+		$unknown = ['country_code' => self::UNKNOWN, 'country' => null, 'region' => null, 'city' => null, 'latitude' => null, 'longitude' => null];
 		$reader = $this->reader();
 		if (!$reader) {
 			return null;
@@ -80,6 +80,8 @@ class GeoIp
 			'country' => $this->name($record, 'country'),
 			'region' => isset($record['subdivisions'][0]['names']['en']) ? mb_substr($record['subdivisions'][0]['names']['en'], 0, 100) : null,
 			'city' => $this->name($record, 'city'),
+			'latitude' => isset($record['location']['latitude']) ? round((float) $record['location']['latitude'], 6) : null,
+			'longitude' => isset($record['location']['longitude']) ? round((float) $record['location']['longitude'], 6) : null,
 		];
 	}
 

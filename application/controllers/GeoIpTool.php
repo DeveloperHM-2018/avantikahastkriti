@@ -10,7 +10,8 @@ defined('BASEPATH') or exit('No direct script access allowed');
 //
 // `update` downloads this month's DB-IP City Lite file (free, CC BY 4.0, new
 // edition each month - a monthly cron is enough) and swaps it in atomically.
-// `backfill` fills location on logged visits that have an IP but no lookup yet.
+// `backfill` fills location (and map coordinates) on logged visits that have
+// an IP but no lookup yet.
 class GeoIpTool extends CI_Controller
 {
 	public function __construct()
@@ -78,11 +79,14 @@ class GeoIpTool extends CI_Controller
 			$this->fail('GeoIP database not installed - run `GeoIpTool update` first');
 		}
 		$done = 0;
+		$lastId = 0; // keyset paging, so a row the database still can't place isn't re-read forever
 		$cache = [];
 		do {
 			$rows = $this->CommonModel->runQuery(
 				"SELECT id, ip_address FROM tbl_page_session_log
-				WHERE country_code IS NULL AND ip_address IS NOT NULL
+				WHERE ip_address IS NOT NULL
+				AND (country_code IS NULL OR (country_code != '" . GeoIp::UNKNOWN . "' AND latitude IS NULL))
+				AND id > $lastId
 				ORDER BY id LIMIT 500",
 				1
 			) ?: [];
@@ -92,6 +96,7 @@ class GeoIpTool extends CI_Controller
 					$cache[$ip] = $this->geoip->lookup($ip);
 				}
 				$this->db->where('id', $row['id'])->update('tbl_page_session_log', $cache[$ip]);
+				$lastId = (int) $row['id'];
 				$done++;
 			}
 		} while (count($rows) === 500);
